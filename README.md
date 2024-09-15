@@ -1,6 +1,7 @@
 # GNSS-Parser-Reproducer
 
 This project is designed to record and replay GNSS serial data, specifically handling NMEA and UBX messages. 
+
 It consists of three main scripts: `record/record.py`, `replay/replay.py`, and `replay/serial_emulator.py`.
 
 ## Features
