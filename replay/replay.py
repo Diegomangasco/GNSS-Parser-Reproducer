@@ -46,8 +46,10 @@ def main():
     data = json.load(f)
     f.close()
 
+    previous_time = 0
+
     for d in data:
-        delta_time = d["timestamp"]
+        delta_time = d["timestamp"]-previous_time
         message_type = d["type"]
         content = d["data"]
         if message_type == "UBX":
@@ -56,6 +58,7 @@ def main():
             content = content.encode()
         time.sleep(delta_time/1e6)
         ser.write(content)
+        previous_time = d["timestamp"]
         if end_time and time.time() > end_time:
             break
     ser.stop()

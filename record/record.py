@@ -1,4 +1,12 @@
 import serial, time, json, argparse
+import signal
+
+global terminatorFlag
+
+def signal_handler(sig, frame):
+    global terminatorFlag
+    print('\nTerminating...');
+    terminatorFlag = True
 
 def save_message(messages, res, timestamp, message_type):
     """
@@ -10,6 +18,8 @@ def save_message(messages, res, timestamp, message_type):
     - timestamp (float): The timestamp of the message.
     - message_type (str): The type of the message (e.g., "NMEA", "UBX").
     """
+    # print(message_type)
+    # print(res.hex())
     data = {
         "timestamp": timestamp,
         "type": message_type,
@@ -50,6 +60,7 @@ def close_file(f):
     f.close()
 
 def main():
+    global terminatorFlag
     """
     Main function to read data from a serial device and save it to a file.
     
@@ -67,6 +78,9 @@ def main():
     args.add_argument("--filename", type=str, help="The file to write to", default="./data/outlog.json")
     args.add_argument("--baudrate", type=int, help="The baudrate to read from", default=115200)
     args.add_argument("--end_time", type=int, help="The time to stop reading in seconds, if not specified, will read indefinitely", default=None)
+
+    terminatorFlag = False
+    signal.signal(signal.SIGINT, signal_handler)
 
     args = args.parse_args()
     device = args.device
@@ -94,6 +108,8 @@ def main():
     nmea_timestamp = None
     previous_data = b''
     flat_time = time.time() * 1e6
+
+    print('Recording...');
     while True:
         data = ser.read(size=1)
         if len(queue) < 1:
@@ -108,7 +124,10 @@ def main():
             queue = last_two_bytes
             ubx_flag = False
         elif last_two_bytes == b'\r\n':
-            save_message(messages, queue + b'\n', nmea_timestamp - flat_time, "NMEA")
+            if ubx_flag != True:
+                save_message(messages, queue + b'\n', nmea_timestamp - flat_time, "NMEA")
+            else:
+                save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
             queue = b''
         elif last_two_bytes == b'\xb5\x62':
             if ubx_flag:
@@ -119,9 +138,10 @@ def main():
         else:
             queue += data
         t = time.time()
-        if end_time is not None and t > end_time:
+        if (end_time is not None and t > end_time) or terminatorFlag:
             break
         previous_data = data
+
     write_to_file(f, messages)
 
 if __name__ == "__main__":
