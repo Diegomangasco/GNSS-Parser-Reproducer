@@ -38,9 +38,9 @@ class DecodedMessage:
             "lon": None,
             "heading": 16
         },
-        b'\01\07': {
-            "lat": 24,
-            "lon": 28,
+        b'\x01\x07': {
+            "lat": 28,
+            "lon": 24,
             "heading": 64
         },
         b'\x01\x12': {
@@ -53,31 +53,40 @@ class DecodedMessage:
     def __init__(self):
         pass
 
-    def extract_data(self, content, type):
+    def extract_data(self, content, message_type):
         """
         Extracts the latitude, longitude, and heading.
         """
-        if type == "NMEA":
+        lat = None
+        lon = None
+        heading = None
+        if message_type == "NMEA":
             values = content.split(",")
-            if self.NMEA_MESSAGES[self.message_type]["lat"]:
-                lat = float(values[self.NMEA_MESSAGES[self.message_type]["lat"]])
+            dict_key = values[0][3:]
+            if dict_key not in self.NMEA_MESSAGES.keys():
+                return None, None, None
+            if self.NMEA_MESSAGES[dict_key]["lat"]:
+                lat = float(values[self.NMEA_MESSAGES[dict_key]["lat"]])
+                
             else:
                 lat = None
-            if self.NMEA_MESSAGES[self.message_type]["lon"]:
-                lon = float(values[self.NMEA_MESSAGES[self.message_type]["lon"]])
+            if self.NMEA_MESSAGES[dict_key]["lon"]:
+                lon = float(values[self.NMEA_MESSAGES[dict_key]["lon"]])
             else:
                 lon = None
-            if self.NMEA_MESSAGES[self.message_type]["heading"]:
-                heading = float(values[self.NMEA_MESSAGES[self.message_type]["heading"]])
+            if self.NMEA_MESSAGES[dict_key]["heading"]:
+                heading = float(values[self.NMEA_MESSAGES[dict_key]["heading"]])
             else:
                 heading = None
-        elif type == "UBX":
-            lat_offset = self.UBX_MESSAGES[self.message_type]["lat"]
-            lon_offset = self.UBX_MESSAGES[self.message_type]["lon"]
-            heading_offset = self.UBX_MESSAGES[self.message_type]["heading"]
+        elif message_type == "UBX":
+            dict_key = content[2:4]
+            if dict_key not in self.UBX_MESSAGES.keys():
+                return None, None, None
+            lat_offset = self.UBX_MESSAGES[dict_key]["lat"]
+            lon_offset = self.UBX_MESSAGES[dict_key]["lon"]
+            heading_offset = self.UBX_MESSAGES[dict_key]["heading"]
 
             lat = None if lat_offset is None else int.from_bytes(content[lat_offset+6:lat_offset+10], byteorder='little', signed=True) / 1e7
             lon = None if lon_offset is None else int.from_bytes(content[lon_offset+6:lon_offset+10], byteorder='little', signed=True) / 1e7
             heading = None if heading_offset is None else int.from_bytes(content[heading_offset+6:heading_offset+10], byteorder='little', signed=True) / 1e5
-
         return lat, lon, heading

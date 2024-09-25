@@ -7,3 +7,7 @@ html, body, #mapid {
 	height: 100%;
 	width: 100%;
 }
+
+.sidebar {
+	will-change: auto;
+}

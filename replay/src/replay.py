@@ -2,6 +2,16 @@ import time, argparse, json, threading, socket, os
 from serial_emulator import SerialEmulator
 from decoded_messages import DecodedMessage
 
+def open_map_gui(lat, lon, server_ip, server_port):
+    """
+    Opens the map GUI.
+    """
+    message = f"map,{lat},{lon}"
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.sendto(message.encode(), (server_ip, server_port))
+    except Exception as e:
+        print(f"Error sending UDP message: {e}")
 
 def start_nodejs_server(httpport, ip, port):
     """
@@ -12,22 +22,37 @@ def start_nodejs_server(httpport, ip, port):
     except Exception as e:
         print(f"Error starting nodejs server: {e}")
 
-def send_udp_message(lat, lon, heading, server_ip, server_port):
+def send_object_udp_message(lat, lon, heading, server_ip, server_port):
     """
     Sends a UDP message with the latitude, longitude, and heading to the specified server.
     """
-    message = json.dumps({"lat": lat, "lon": lon, "heading": heading})
+    id = 1
+    station_type = 5
+    if not heading:
+        heading = 361
+    message = f"object,{id},{lat},{lon},{station_type},{heading}"
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         sock.sendto(message.encode(), (server_ip, server_port))
     except Exception as e:
         print(f"Error sending UDP message: {e}")
 
-def udp_thread(content, server_ip, server_port, lat, lon, heading):
+def object_udp_thread(content, server_ip, server_port, lat, lon, heading):
     """
     Thread function to send a UDP message with the latitude, longitude, and heading to the specified server.
     """
-    send_udp_message(lat, lon, heading, server_ip, server_port)
+    send_object_udp_message(lat, lon, heading, server_ip, server_port)
+
+def stop_server(server_ip, server_port):
+    """
+    Stops the nodejs server for the vehicle visualizer.
+    """
+    message = f"terminate"
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.sendto(message.encode(), (server_ip, server_port))
+    except Exception as e:
+        print(f"Error stopping nodejs server: {e}")
 
 
 def main():
@@ -47,19 +72,19 @@ def main():
 
     Command-line Arguments:
     - --filename (str): The file to read data from. Default is "./data/examples/example1.json".
-    - --server_device (str): The device to write data to. Default is "./replay/serial_devices/ttyNewServer".
-    - --client_device (str): The device to read data from. Default is "./replay/serial_devices/ttyNewClient".
+    - --server_device (str): The device to write data to. Default is "./replay/ttyNewServer".
+    - --client_device (str): The device to read data from. Default is "./replay/ttyNewClient".
     - --baudrate (int): The baudrate to write. Default is 115200.
     - --start_time (int): The timestamp to start the reading in seconds. If not specified, will read from the beginning of the file.
     - --end_time (int): The time to stop reading in seconds. If not specified, will write until the end of the file.
 
     Example:
-    python replay.py --filename ./data/outlog.json --server_device ./replay/ttyNewServer --client_device ./replay/ttyNewClient --baudrate 115200 --end_time 60
+    python replay.py --filename ./data/examples/vehicle_log_brief.json --server_device ./replay/ttyNewServer --client_device ./replay/ttyNewClient --baudrate 115200 --end_time 60
     """
     args = argparse.ArgumentParser()
-    args.add_argument("--filename", type=str, help="The file to read data from", default="./data/examples/example1.json")
-    args.add_argument("--server_device", type=str, help="The device to write data to", default="./replay/serial_devices/ttyNewServer")
-    args.add_argument("--client_device", type=str, help="The device to read data from", default="./replay/serial_devices/ttyNewClient")
+    args.add_argument("--filename", type=str, help="The file to read data from", default="./data/examples/vehicle_log_brief.json")
+    args.add_argument("--server_device", type=str, help="The device to write data to", default="./replay/ttyNewServer")
+    args.add_argument("--client_device", type=str, help="The device to read data from", default="./replay/ttyNewClient")
     args.add_argument("--baudrate", type=int, help="The baudrate to write", default=115200)
     args.add_argument("--start_time", type=int, help="The timestamp to start the reading in seconds. If not specified, will read from the beginning of the file.", default=None)
     args.add_argument("--end_time", type=int, help="The time to stop reading in seconds, if not specified, will write until the endo fo the file", default=None)
@@ -81,7 +106,7 @@ def main():
     gui = True
     
     ser = SerialEmulator(device_port=server_device, client_port=client_device, baudrate=baudrate)
-    decoder = DecodedMessages()
+    decoder = DecodedMessage()
 
     f = open(filename, "r")
     data = json.load(f)
@@ -92,6 +117,7 @@ def main():
         data = list(filter(lambda x: x["timestamp"] >= start_time_micseconds, data))
 
     previous_time = 0
+    map_opened = False
 
     if gui:
         httpport = args.httpport
@@ -99,20 +125,43 @@ def main():
         server_port = args.server_port
         start_nodejs_server(httpport, server_ip, server_port)
 
+    lat = None
+    lon = None    
+    heading = None
     for d in data:
         delta_time = d["timestamp"] - previous_time
         message_type = d["type"]
         content = d["data"]
         if message_type == "UBX":
             content = bytes.fromhex(content)
+            tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content, message_type)
+            if tmp_lat:
+                lat = tmp_lat
+            if tmp_lon:
+                lon = tmp_lon
+            if tmp_heading:
+                heading = tmp_heading
         else:
             content = content.encode()
-        lat, lon, heading = decoder.extract_data(content, message_type)
+            tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content, message_type)
+            if tmp_lat:
+                lat = tmp_lat
+            if tmp_lon:
+                lon = tmp_lon
+            if tmp_heading:
+                heading = tmp_heading
         time.sleep(delta_time/1e6)
         ser.write(content)
-        if gui:
+        if gui and lat and lon:
             try:
-                udp_sender = threading.Thread(target=udp_thread, args=(content, server_ip, server_port, lat, lon, heading))
+                if not map_opened:
+                    open_map_gui(lat, lon, server_ip, server_port)
+                    map_opened = True
+                    print("It is possible to open the map GUI at http://localhost:8080")
+            except Exception as e:
+                print(f"Error opening map GUI: {e}")
+            try:
+                udp_sender = threading.Thread(target=object_udp_thread, args=(content, server_ip, server_port, lat, lon, heading))
                 udp_sender.start()
                 udp_sender.join()
             except Exception as e:
@@ -121,6 +170,7 @@ def main():
         if end_time and time.time() > end_time:
             break
     ser.stop()
+    stop_server(server_ip, server_port)
 
 if __name__ == "__main__":
     main()

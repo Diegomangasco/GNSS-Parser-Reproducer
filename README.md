@@ -9,6 +9,7 @@ It consists of three main scripts: `record/src/record.py`, `replay/src/replay.py
 - **serial_emulator.py**: Emulates a serial device using `socat`.
 - **record.py**: Reads data from a serial device and saves it to a JSON file.
 - **replay.py**: Reads data from a JSON file and writes it to a serial device and, if desired, it displays a GUI to visualize the vehicle.
+- **decoded_messages**: Decodes NMEA messages to extract latitude, longitude, and heading of vehicle for the GUI.
 
 ## Requirements
 

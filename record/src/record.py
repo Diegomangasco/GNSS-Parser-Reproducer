@@ -121,6 +121,8 @@ def main():
         if last_two_bytes == b'$G':
             if ubx_flag:
                 save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
+            elif len(queue) - 1 > 0:
+                save_message(messages, queue[:-1], nmea_timestamp - flat_time, "Unknown")
             nmea_timestamp = time.time() * 1e6
             queue = last_two_bytes
             ubx_flag = False
@@ -129,10 +131,13 @@ def main():
                 save_message(messages, queue + b'\n', nmea_timestamp - flat_time, "NMEA")
             else:
                 save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
+                ubx_flag = False
             queue = b''
         elif last_two_bytes == b'\xb5\x62':
             if ubx_flag:
                 save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
+            elif len(queue) - 1 > 0:
+                save_message(messages, queue[:-1], nmea_timestamp - flat_time, "Unknown")
             ubx_flag = True
             ubx_timestamp = time.time() * 1e6
             queue = last_two_bytes

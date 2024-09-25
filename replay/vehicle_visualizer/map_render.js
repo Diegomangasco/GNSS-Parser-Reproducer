@@ -1,6 +1,6 @@
 /**
  * This file contains the client JavaScript logic, in charge of receiving the coordinates of the objects
- * (i.e. the vehicles) and their heading from the server (which in turn receives them from the S-LDM via UDP).
+ * (i.e. the vehicles) and their heading from the server (which in turn receives them via UDP).
  * This script uses the received information in order to render a Leaflet JS map showing all the moving nodes.
  * The server->client communication is realized thanks to socket.io.
  */
@@ -98,7 +98,7 @@ var greenCircleIcon = L.icon({
 // Receive the first message from the server
 socket.on('message', (msg) => {
 	if (msg == null) {
-		document.getElementById('statusid').innerHTML = '<p>Waiting for a connection from the S-LDM</p>';
+		document.getElementById('statusid').innerHTML = '<p>Waiting for a connection from the map</p>';
 	} else {
 		let msg_fields = msg.split(",");
 
@@ -132,7 +132,7 @@ socket.on('message', (msg) => {
 			// "map draw" message: "map,<lat>,<lon>,<mapbox token>"
 			case 'map':
 				if (map_rx === false) {
-					if (msg_fields.length !== 4) {
+					if (msg_fields.length !== 3) {
 						console.error("VehicleVisualizer: Error: received a corrupted map draw message from the server");
 					} else {
 						console.info("VehicleVisualizer: The map will be drawn centered at: ", msg_fields[1], msg_fields[2]);
@@ -173,9 +173,6 @@ socket.on('message', (msg) => {
 					}
 				}
 				break;
-			// This 'case' is added just for additional safety. As the server is shut down every time a "terminate" message
-			// is received from the S-LDM and no "terminate" message is forwarded via socket.io, this point should never be
-			// reached
 			case 'terminate':
 				console.log("The server has been terminated.");
 				break;
