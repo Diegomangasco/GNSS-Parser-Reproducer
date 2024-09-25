@@ -218,6 +218,8 @@ function update_marker(mapref,id,lat,lon,stationtype,heading)
 				}
 			}
 
+			
+
 			// Attempt to use an icon marker
 			newmarker = L.marker([lat,lon], {icon: initial_icon}).addTo(mapref);
 

@@ -103,7 +103,7 @@ def main():
     gui = args.gui
 
     # TODO To cancel
-    gui = True
+    gui = False
     
     ser = SerialEmulator(device_port=server_device, client_port=client_device, baudrate=baudrate)
     decoder = DecodedMessage()
@@ -133,37 +133,42 @@ def main():
         delta_time = d["timestamp"] - previous_time
         message_type = d["type"]
         content = d["data"]
+        # print(content)
         if message_type == "UBX":
             content = bytes.fromhex(content)
-            tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content, message_type)
-            if tmp_lat:
-                lat = tmp_lat
-            if tmp_lon:
-                lon = tmp_lon
-            if tmp_heading:
-                heading = tmp_heading
+            if gui:
+                tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content, message_type)
+                if tmp_lat:
+                    lat = tmp_lat
+                if tmp_lon:
+                    lon = tmp_lon
+                if tmp_heading:
+                    heading = tmp_heading
         else:
-            tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content, message_type)
-            if tmp_lat:
-                lat = tmp_lat
-            if tmp_lon:
-                lon = tmp_lon
-            if tmp_heading:
-                heading = tmp_heading
+            content=content.encode()
+            if gui:
+                tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content, message_type)
+                if tmp_lat:
+                    lat = tmp_lat
+                if tmp_lon:
+                    lon = tmp_lon
+                if tmp_heading:
+                    heading = tmp_heading
         time.sleep(delta_time/1e6)
+
         ser.write(content)
         if gui and lat and lon:
             try:
                 if not map_opened:
+                    time.sleep(1)
                     open_map_gui(lat, lon, server_ip, server_port)
                     map_opened = True
                     print("It is possible to open the map GUI at http://localhost:8080")
             except Exception as e:
                 print(f"Error opening map GUI: {e}")
             try:
-                udp_sender = threading.Thread(target=object_udp_thread, args=(server_ip, server_port, lat, lon, heading))
-                udp_sender.start()
-                udp_sender.join()
+                object_udp_thread(server_ip, server_port, lat, lon, heading)
+                pass
             except Exception as e:
                 print(f"Error starting thread: {e}")
         previous_time = d["timestamp"]

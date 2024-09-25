@@ -52,8 +52,9 @@ io.on('connection', (socket) => {
 // As a new packet is received, its content is forwarded to the client (i.e. the browser) via socket.io
 udpSocket.on('message', (msg, rinfo) => {
     try {
-        
         const msg_fields = msg.toString().split(',');
+
+        // console.log(msg.toString());
     
         if (msg_fields[0] === "map") {
             if (msg_fields.length !== 3) {
