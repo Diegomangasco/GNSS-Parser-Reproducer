@@ -37,7 +37,7 @@ def send_object_udp_message(lat, lon, heading, server_ip, server_port):
     except Exception as e:
         print(f"Error sending UDP message: {e}")
 
-def object_udp_thread(content, server_ip, server_port, lat, lon, heading):
+def object_udp_thread(server_ip, server_port, lat, lon, heading):
     """
     Thread function to send a UDP message with the latitude, longitude, and heading to the specified server.
     """
@@ -128,6 +128,7 @@ def main():
     lat = None
     lon = None    
     heading = None
+    data_event = threading.Event()
     for d in data:
         delta_time = d["timestamp"] - previous_time
         message_type = d["type"]
@@ -142,7 +143,6 @@ def main():
             if tmp_heading:
                 heading = tmp_heading
         else:
-            content = content.encode()
             tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content, message_type)
             if tmp_lat:
                 lat = tmp_lat
@@ -161,7 +161,7 @@ def main():
             except Exception as e:
                 print(f"Error opening map GUI: {e}")
             try:
-                udp_sender = threading.Thread(target=object_udp_thread, args=(content, server_ip, server_port, lat, lon, heading))
+                udp_sender = threading.Thread(target=object_udp_thread, args=(server_ip, server_port, lat, lon, heading))
                 udp_sender.start()
                 udp_sender.join()
             except Exception as e:

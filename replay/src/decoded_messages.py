@@ -66,12 +66,23 @@ class DecodedMessage:
             if dict_key not in self.NMEA_MESSAGES.keys():
                 return None, None, None
             if self.NMEA_MESSAGES[dict_key]["lat"]:
-                lat = float(values[self.NMEA_MESSAGES[dict_key]["lat"]])
-                
+                if dict_key != "DTM":
+                    lat_split = values[self.NMEA_MESSAGES[dict_key]["lat"]].split(".")
+                    degrees = int(lat_split[0][:-2])
+                    minutes = float(lat_split[0][-2:] + "." + lat_split[1])
+                    lat = degrees + minutes/60
+                else:
+                    lat = float(values[self.NMEA_MESSAGES[dict_key]["lat"]])
             else:
                 lat = None
             if self.NMEA_MESSAGES[dict_key]["lon"]:
-                lon = float(values[self.NMEA_MESSAGES[dict_key]["lon"]])
+                if dict_key != "DTM":
+                    lon_split = values[self.NMEA_MESSAGES[dict_key]["lon"]].split(".")
+                    degrees = int(lon_split[0][:-2])
+                    minutes = float(lon_split[0][-2:] + "." + lon_split[1])
+                    lon = degrees + minutes/60
+                else:
+                    lon = float(values[self.NMEA_MESSAGES[dict_key]["lon"]])
             else:
                 lon = None
             if self.NMEA_MESSAGES[dict_key]["heading"]:
