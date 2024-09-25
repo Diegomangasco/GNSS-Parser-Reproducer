@@ -1,4 +1,4 @@
-import subprocess, serial, time
+import subprocess, serial, time, os
 
 class SerialEmulator(object):
     def __init__(self, device_port='./ttyNewDevice', client_port='./ttyNewClient', baudrate=115200):
@@ -6,10 +6,23 @@ class SerialEmulator(object):
         self.client_port = client_port
         cmd=['/usr/bin/socat','-d','-d','PTY,link=%s,raw,echo=0' %
                 self.device_port, 'PTY,link=%s,raw,echo=0' % self.client_port]
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except:
+            print("Error: Could not create virtual serial port")
         time.sleep(1)
-        self.serial = serial.Serial(
+        self.serial_server = serial.Serial(
             self.device_port, 
+            baudrate=baudrate, 
+            rtscts=True, 
+            dsrdtr=True, 
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            bytesize=serial.EIGHTBITS,
+            timeout=0
+        )
+        self.serial_client = serial.Serial(
+            self.client_port, 
             baudrate=baudrate, 
             rtscts=True, 
             dsrdtr=True, 
@@ -23,14 +36,17 @@ class SerialEmulator(object):
 
     def write(self, out):
         try: 
-            ret = self.serial.write(out)
+            ret = self.serial_server.write(out)
             # print(ret)
         except:
             serial.SerialTimeoutException
 
     def read(self):
-        data = self.serial.read(1)
-        return data
+        try:
+            data = self.serial_client.read(1)
+            return data
+        except:
+            serial.SerialTimeoutException
 
     def __del__(self):
         self.stop()
