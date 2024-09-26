@@ -76,7 +76,7 @@ def main():
     - --end_time (int): The time to stop reading in seconds. If not specified, will write until the end of the file.
 
     Example:
-    python replay.py --filename ./data/examples/vehicle_log_brief.json --server_device ./replay/ttyNewServer --client_device ./replay/ttyNewClient --baudrate 115200 --end_time 60
+    python replay/src/replay.py --filename ./data/examples/vehicle_log_brief.json --server_device ./replay/ttyNewServer --client_device ./replay/ttyNewClient --baudrate 115200 --end_time 60 --gui 1 --serial 1
     """
     args = argparse.ArgumentParser()
     args.add_argument("--filename", type=str, help="The file to read data from", default="./data/examples/vehicle_log_brief.json")
@@ -189,7 +189,7 @@ def main():
             ser.write(content)
         # after_time represents the time passed from the end of the serial write to the end of the for loop
         after_time = time.time() * 1e6
-        
+
         # Calculate a variable delta time factor to adjust the time of the serial write to be as close as possible to a real time simulation
         # delta_time_us represents the real time in microseconds from the beginning of the simulation to the current time
         delta_time_us_real = time.time() * 1e6 - startup_time
