@@ -4,6 +4,9 @@ import signal
 global terminatorFlag
 
 def signal_handler(sig, frame):
+    """
+    Signal handler for the SIGINT signal.
+    """
     global terminatorFlag
     print('\nTerminating...');
     terminatorFlag = True
@@ -116,8 +119,10 @@ def main():
             previous_data = data
             queue += data
             continue
+        # Read the last two bytes of the queue
         last_two_bytes = previous_data + data
         if last_two_bytes == b'$G':
+            # A NMEA message is starting
             if ubx_flag:
                 save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
             elif len(queue) - 1 > 0:
@@ -126,6 +131,7 @@ def main():
             queue = last_two_bytes
             ubx_flag = False
         elif last_two_bytes == b'\r\n':
+            # One message is ending
             if not ubx_flag:
                 save_message(messages, queue + b'\n', nmea_timestamp - flat_time, "NMEA")
             else:
@@ -133,6 +139,7 @@ def main():
                 ubx_flag = False
             queue = b''
         elif last_two_bytes == b'\xb5\x62':
+            # A UBX message is starting
             if ubx_flag:
                 save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
             elif len(queue) - 1 > 0:
@@ -147,6 +154,7 @@ def main():
             break
         previous_data = data
 
+    # Write the messages to the file
     write_to_file(f, messages)
 
 if __name__ == "__main__":

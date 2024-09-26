@@ -101,14 +101,15 @@ def main():
     gui = args.gui
     serial = args.serial
 
-    # gui = 1
     assert serial > 0 or gui > 0, "At least one of the serial or GUI options must be activated"
     
     ser = None
     decoder = None
     if serial:
+        # Creation of the serial emulator
         ser = SerialEmulator(device_port=server_device, client_port=client_device, baudrate=baudrate)
     if gui:
+        # Creation of the decoded message object
         decoder = DecodedMessage()
 
     f = open(filename, "r")
@@ -116,6 +117,7 @@ def main():
     f.close()
     
     if start_time:
+        # Filter the data to start from the specified time
         start_time_micseconds = start_time * 1e6
         assert start_time_micseconds < data[-1]["timestamp"], "The start time is greater than the last timestamp in the file"
         data = list(filter(lambda x: x["timestamp"] >= start_time_micseconds, data))
@@ -124,6 +126,7 @@ def main():
     map_opened = False
 
     if gui:
+        # If GUI modality is activated, start the nodejs server
         httpport = args.httpport
         server_ip = args.server_ip
         server_port = args.server_port
@@ -137,8 +140,8 @@ def main():
     heading = None
     before_time = 0
     after_time = 0
-    delta_us = 0
-    startup_time = time.time()*1e6
+    variable_delta_us_factor = 0
+    startup_time = time.time() * 1e6
     for d in data:
         before_time = time.time() * 1e6
         delta_time = d["timestamp"] - previous_time
@@ -155,6 +158,7 @@ def main():
                 if tmp_heading:
                     heading = tmp_heading
         else:
+            # For the NMEA messages we need to encode the content for the serial emulator and decode it for the GUI (to obtain a string)
             content = content.encode()
             if gui:
                 tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content.decode(), message_type)
@@ -164,22 +168,43 @@ def main():
                     lon = tmp_lon
                 if tmp_heading:
                     heading = tmp_heading
+        # before_time represents the time passed from the beginning of the for loop to the beginning of the serial write
         before_time = time.time() * 1e6 - before_time
-        if delta_time > before_time + after_time + delta_us:
-            time.sleep((delta_time - before_time - after_time - delta_us)/1e6)
-            # time.sleep(delta_time/1e6)
-            # pass
+        if delta_time > before_time + after_time + variable_delta_us_factor:
+            # The delta time is diminished by three time factors
+            time.sleep((delta_time - before_time - after_time - variable_delta_us_factor) / 1e6)
         else:
-            time.sleep(delta_time/1e6)
-            # pass
-        after_time = time.time() * 1e6
+            factors = [before_time, after_time, variable_delta_us_factor]
+            factors.sort()
+            if delta_time > factors[0] + factors[1]:
+                # The delta time is diminished by two time factors
+                time.sleep((delta_time - factors[0] - factors[1]) / 1e6)
+            elif delta_time > factors[0]:
+                # The delta time is diminished by one time factor
+                time.sleep((delta_time - factors[0]) / 1e6)
+            else:
+                # The delta time is not diminished by any time factor
+                time.sleep(delta_time / 1e6)
         if serial:
-            # Calculate a ... -> to be commented
-            delta_us=-(d["timestamp"]-(time.time()*1e6-startup_time)-(start_time*1e6 if start_time else 0))
             ser.write(content)
+        # after_time represents the time passed from the end of the serial write to the end of the for loop
+        after_time = time.time() * 1e6
+        
+        # Calculate a variable delta time factor to adjust the time of the serial write to be as close as possible to a real time simulation
+        # delta_time_us represents the real time in microseconds from the beginning of the simulation to the current time
+        delta_time_us_real = time.time() * 1e6 - startup_time
+        # start_time_us represents the time in microseconds from the beginning of the messages simulation to the start time selected by the user
+        start_time_us = start_time * 1e6 if start_time else 0
+        # delta_time_us_simulation represents the time in microseconds from the beginning of the messages simulation time to the current message time
+        delta_time_us_simulation = d["timestamp"] - start_time_us
+        # We want that the time of the serial write is as close as possible to the real time simulation
+        # variable_delta_us_factor represents the difference between the simulation time and the real time
+        # It should be as close as possible to 0 and it is used to adjust the waiting time for the serial write
+        variable_delta_us_factor = abs(delta_time_us_simulation - delta_time_us_real)
         if gui and lat and lon:
             try:
                 if not map_opened:
+                    # Open the map GUI after the nodejs server is ready
                     fp = open(fifo_path, 'r')
                     info = fp.read()
                     if "ready" not in info:
@@ -191,6 +216,7 @@ def main():
                 print(f"Error opening map GUI: {e}")
                 raise e
             try:
+                # Send the new object position to the server that will update the map GUI
                 send_object_udp_message(lat, lon, heading, server_ip, server_port)
             except Exception as e:
                 print(f"Error sending UDP message: {e}")
