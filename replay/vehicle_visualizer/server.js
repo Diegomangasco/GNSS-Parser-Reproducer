@@ -10,8 +10,8 @@ var mapmsg = null;
 
 // Read the server port as a command line option
 const server_argv = process.argv.slice(2);
-if (server_argv.length != 3) {
-    console.error("VehicleVisualizer: Error. Three arguments are expected and " + server_argv.length.toString() + " were specified.");
+if (server_argv.length != 4) {
+    console.error("VehicleVisualizer: Error. Four arguments are expected and " + server_argv.length.toString() + " were specified.");
     process.exit(1);
 } else {
     console.log("VehicleVisualizer: HTTP server listening on port: " + server_argv[0]);

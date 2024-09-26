@@ -101,7 +101,7 @@ def main():
     gui = args.gui
     serial = args.serial
 
-    gui = 1
+    # gui = 1
     assert serial > 0 or gui > 0, "At least one of the serial or GUI options must be activated"
     
     ser = None
@@ -120,7 +120,7 @@ def main():
         assert start_time_micseconds < data[-1]["timestamp"], "The start time is greater than the last timestamp in the file"
         data = list(filter(lambda x: x["timestamp"] >= start_time_micseconds, data))
     
-    previous_time = 0
+    previous_time = 0 if not start_time else start_time*1e6
     map_opened = False
 
     if gui:
@@ -130,13 +130,15 @@ def main():
         fifo_path = "./replay/fifo"
         if not os.path.exists(fifo_path):
             os.mkfifo(fifo_path)
-        start_nodejs_server(httpport, server_ip, server_port)
+        start_nodejs_server(httpport, server_ip, server_port, fifo_path)
 
     lat = None
     lon = None    
     heading = None
     before_time = 0
     after_time = 0
+    delta_us = 0
+    startup_time = time.time()*1e6
     for d in data:
         before_time = time.time() * 1e6
         delta_time = d["timestamp"] - previous_time
@@ -163,12 +165,17 @@ def main():
                 if tmp_heading:
                     heading = tmp_heading
         before_time = time.time() * 1e6 - before_time
-        if delta_time > before_time + after_time:
-            time.sleep((delta_time - before_time - after_time)/1e6)
+        if delta_time > before_time + after_time + delta_us:
+            time.sleep((delta_time - before_time - after_time - delta_us)/1e6)
+            # time.sleep(delta_time/1e6)
+            # pass
         else:
             time.sleep(delta_time/1e6)
+            # pass
         after_time = time.time() * 1e6
         if serial:
+            # Calculate a ... -> to be commented
+            delta_us=-(d["timestamp"]-(time.time()*1e6-startup_time)-(start_time*1e6 if start_time else 0))
             ser.write(content)
         if gui and lat and lon:
             try:
