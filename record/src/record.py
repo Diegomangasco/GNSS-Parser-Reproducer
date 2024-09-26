@@ -109,6 +109,7 @@ def main():
     ubx_flag = False
     ubx_timestamp = None
     nmea_timestamp = None
+    unknown_timestamp = None
     previous_data = b''
     flat_time = time.time() * 1e6
 
@@ -126,7 +127,7 @@ def main():
             if ubx_flag:
                 save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
             elif len(queue) - 1 > 0:
-                save_message(messages, queue[:-1], time.time() * 1e6 - flat_time, "Unknown")
+                save_message(messages, queue[:-1], unknown_timestamp - flat_time, "Unknown")
             nmea_timestamp = time.time() * 1e6
             queue = last_two_bytes
             ubx_flag = False
@@ -138,12 +139,13 @@ def main():
                 save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
                 ubx_flag = False
             queue = b''
+            unknown_timestamp = time.time() * 1e6
         elif last_two_bytes == b'\xb5\x62':
             # A UBX message is starting
             if ubx_flag:
                 save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
             elif len(queue) - 1 > 0:
-                save_message(messages, queue[:-1], time.time() * 1e6 - flat_time, "Unknown")
+                save_message(messages, queue[:-1], unknown_timestamp - flat_time, "Unknown")
             ubx_flag = True
             ubx_timestamp = time.time() * 1e6
             queue = last_two_bytes
