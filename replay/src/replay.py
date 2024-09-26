@@ -12,15 +12,17 @@ def open_map_gui(lat, lon, server_ip, server_port):
         sock.sendto(message.encode(), (server_ip, server_port))
     except Exception as e:
         print(f"Error sending UDP message: {e}")
+        raise e
 
-def start_nodejs_server(httpport, ip, port):
+def start_nodejs_server(httpport, ip, port, fifo_path):
     """
     Starts the nodejs server for the vehicle visualizer.
     """
     try:
-        os.system(f"node ./replay/vehicle_visualizer/server.js {httpport} {ip} {port} &")
+        os.system(f"node ./replay/vehicle_visualizer/server.js {httpport} {ip} {port} {fifo_path} &")
     except Exception as e:
         print(f"Error starting nodejs server: {e}")
+        raise e
 
 def send_object_udp_message(lat, lon, heading, server_ip, server_port):
     """
@@ -36,12 +38,7 @@ def send_object_udp_message(lat, lon, heading, server_ip, server_port):
         sock.sendto(message.encode(), (server_ip, server_port))
     except Exception as e:
         print(f"Error sending UDP message: {e}")
-
-def object_udp_thread(server_ip, server_port, lat, lon, heading):
-    """
-    Thread function to send a UDP message with the latitude, longitude, and heading to the specified server.
-    """
-    send_object_udp_message(lat, lon, heading, server_ip, server_port)
+        raise e
 
 def stop_server(server_ip, server_port):
     """
@@ -53,7 +50,7 @@ def stop_server(server_ip, server_port):
         sock.sendto(message.encode(), (server_ip, server_port))
     except Exception as e:
         print(f"Error stopping nodejs server: {e}")
-
+        raise e
 
 def main():
     """
@@ -89,6 +86,7 @@ def main():
     args.add_argument("--start_time", type=int, help="The timestamp to start the reading in seconds. If not specified, will read from the beginning of the file.", default=None)
     args.add_argument("--end_time", type=int, help="The time to stop reading in seconds, if not specified, will write until the endo fo the file", default=None)
     args.add_argument("--gui", type=int, help="Whether to display the GUI. Default is False (0), can be activated with any other positive value", default=0)
+    args.add_argument("--serial", type=int, help="Whether to use the serial emulator. Default is False (0), can be activated with any other positive value", default=0)
     args.add_argument("--httpport", type=int, help="The port for the HTTP server. Default is 8080", default=8080)
     args.add_argument("--server_ip", type=str, help="The IP address of the server. Default is 127.0.0.1", default="127.0.0.1")
     args.add_argument("--server_port", type=int, help="The port of the server. Default is 48110", default=48110)
@@ -101,21 +99,27 @@ def main():
     start_time = args.start_time
     end_time = args.end_time
     gui = args.gui
+    serial = args.serial
 
-    # TODO To cancel
-    gui = False
+    gui = 1
+    assert serial > 0 or gui > 0, "At least one of the serial or GUI options must be activated"
     
-    ser = SerialEmulator(device_port=server_device, client_port=client_device, baudrate=baudrate)
-    decoder = DecodedMessage()
+    ser = None
+    decoder = None
+    if serial:
+        ser = SerialEmulator(device_port=server_device, client_port=client_device, baudrate=baudrate)
+    if gui:
+        decoder = DecodedMessage()
 
     f = open(filename, "r")
     data = json.load(f)
     f.close()
-
+    
     if start_time:
         start_time_micseconds = start_time * 1e6
+        assert start_time_micseconds < data[-1]["timestamp"], "The start time is greater than the last timestamp in the file"
         data = list(filter(lambda x: x["timestamp"] >= start_time_micseconds, data))
-
+    
     previous_time = 0
     map_opened = False
 
@@ -123,17 +127,21 @@ def main():
         httpport = args.httpport
         server_ip = args.server_ip
         server_port = args.server_port
+        fifo_path = "./replay/fifo"
+        if not os.path.exists(fifo_path):
+            os.mkfifo(fifo_path)
         start_nodejs_server(httpport, server_ip, server_port)
 
     lat = None
     lon = None    
     heading = None
-    data_event = threading.Event()
+    before_time = 0
+    after_time = 0
     for d in data:
+        before_time = time.time() * 1e6
         delta_time = d["timestamp"] - previous_time
         message_type = d["type"]
         content = d["data"]
-        # print(content)
         if message_type == "UBX":
             content = bytes.fromhex(content)
             if gui:
@@ -145,37 +153,49 @@ def main():
                 if tmp_heading:
                     heading = tmp_heading
         else:
-            content=content.encode()
+            content = content.encode()
             if gui:
-                tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content, message_type)
+                tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content.decode(), message_type)
                 if tmp_lat:
                     lat = tmp_lat
                 if tmp_lon:
                     lon = tmp_lon
                 if tmp_heading:
                     heading = tmp_heading
-        time.sleep(delta_time/1e6)
-
-        ser.write(content)
+        before_time = time.time() * 1e6 - before_time
+        if delta_time > before_time + after_time:
+            time.sleep((delta_time - before_time - after_time)/1e6)
+        else:
+            time.sleep(delta_time/1e6)
+        after_time = time.time() * 1e6
+        if serial:
+            ser.write(content)
         if gui and lat and lon:
             try:
                 if not map_opened:
-                    time.sleep(1)
+                    fp = open(fifo_path, 'r')
+                    info = fp.read()
+                    if "ready" not in info:
+                        raise Exception("Error opening map GUI")
                     open_map_gui(lat, lon, server_ip, server_port)
                     map_opened = True
                     print("It is possible to open the map GUI at http://localhost:8080")
             except Exception as e:
                 print(f"Error opening map GUI: {e}")
+                raise e
             try:
-                object_udp_thread(server_ip, server_port, lat, lon, heading)
-                pass
+                send_object_udp_message(lat, lon, heading, server_ip, server_port)
             except Exception as e:
-                print(f"Error starting thread: {e}")
+                print(f"Error sending UDP message: {e}")
+                raise e
         previous_time = d["timestamp"]
         if end_time and time.time() > end_time:
             break
-    ser.stop()
-    stop_server(server_ip, server_port)
+        after_time = time.time() * 1e6 - after_time
+    if serial:
+        ser.stop()
+    if gui:
+        stop_server(server_ip, server_port)
 
 if __name__ == "__main__":
     main()

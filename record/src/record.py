@@ -23,7 +23,7 @@ def save_message(messages, res, timestamp, message_type):
     data = {
         "timestamp": timestamp,
         "type": message_type,
-        "data": res.hex() if message_type == "UBX" else res.decode()
+        "data": res.hex() if message_type in ["UBX", "Unknown"] else res.decode()
     }
     messages.append(data)
 
@@ -110,7 +110,6 @@ def main():
     flat_time = time.time() * 1e6
 
     print('Recording...');
-    # TODO Manage the case of NMEA-UBX with corrupted UBX messages (sign as unknown type)
     while True:
         data = ser.read(size=1)
         if len(queue) < 1:
@@ -122,7 +121,7 @@ def main():
             if ubx_flag:
                 save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
             elif len(queue) - 1 > 0:
-                save_message(messages, queue[:-1], nmea_timestamp - flat_time, "Unknown")
+                save_message(messages, queue[:-1], time.time() * 1e6 - flat_time, "Unknown")
             nmea_timestamp = time.time() * 1e6
             queue = last_two_bytes
             ubx_flag = False
@@ -137,7 +136,7 @@ def main():
             if ubx_flag:
                 save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
             elif len(queue) - 1 > 0:
-                save_message(messages, queue[:-1], nmea_timestamp - flat_time, "Unknown")
+                save_message(messages, queue[:-1], time.time() * 1e6 - flat_time, "Unknown")
             ubx_flag = True
             ubx_timestamp = time.time() * 1e6
             queue = last_two_bytes

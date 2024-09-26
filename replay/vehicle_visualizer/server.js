@@ -36,7 +36,8 @@ udpSocket.bind({
 udpSocket.on('listening', () => {
     const address = udpSocket.address();
     console.log('VehicleVisualizer: UDP connection ready at %s:%s', address.address, address.port);
-    fs.appendFileSync('/tmp/vehvizfifo' + server_argv[3], 'STARTED');
+    fs.writeFileSync(server_argv[3], 'ready'); // Write to the FIFO
+
 });
 
 // Initialize socket.io
@@ -54,7 +55,7 @@ udpSocket.on('message', (msg, rinfo) => {
     try {
         const msg_fields = msg.toString().split(',');
 
-        // console.log(msg.toString());
+        console.log(msg.toString());
     
         if (msg_fields[0] === "map") {
             if (msg_fields.length !== 3) {

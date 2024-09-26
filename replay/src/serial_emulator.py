@@ -10,6 +10,7 @@ class SerialEmulator(object):
             self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         except:
             print("Error: Could not create virtual serial port")
+            raise serial.SerialException
         time.sleep(1)
         self.serial_server = serial.Serial(
             self.device_port, 
@@ -39,14 +40,14 @@ class SerialEmulator(object):
             ret = self.serial_server.write(out)
             # print(ret)
         except:
-            serial.SerialTimeoutException
+            raise serial.SerialTimeoutException
 
     def read(self):
         try:
             data = self.serial_client.read(1)
             return data
         except:
-            serial.SerialTimeoutException
+            raise serial.SerialTimeoutException
 
     def __del__(self):
         self.stop()
