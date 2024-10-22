@@ -126,7 +126,7 @@ def main():
     client_device = args.client_device
     baudrate = args.baudrate
     start_time = args.start_time
-    end_time = args.end_time * 1e6 if end_time else None
+    end_time = args.end_time * 1e6 if args.end_time else None
     gui = args.gui
     serial = args.serial
     test_rate = args.test_rate
