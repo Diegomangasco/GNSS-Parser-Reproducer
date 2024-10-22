@@ -126,7 +126,7 @@ def main():
     client_device = args.client_device
     baudrate = args.baudrate
     start_time = args.start_time
-    end_time = args.end_time
+    end_time = args.end_time * 1e6
     gui = args.gui
     serial = args.serial
     test_rate = args.test_rate
@@ -375,7 +375,7 @@ def main():
                 print(f"Error sending UDP message: {e}")
                 raise e
         previous_time = d["timestamp"]
-        if end_time and time.time() > end_time:
+        if end_time and time.time() - startup_time > end_time:
             break
         after_time = time.time() * 1e6 - after_time
     if serial:

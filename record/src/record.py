@@ -90,8 +90,6 @@ def main():
     filename = args.filename
     baudrate = args.baudrate
     end_time = args.end_time
-    if end_time is not None:
-        end_time = time.time() + end_time
 
     ser = serial.Serial(
         port=device,
@@ -114,6 +112,8 @@ def main():
     flat_time = time.time() * 1e6
 
     print('Recording...');
+    if end_time is not None:
+        end_time = time.time() + end_time
     while True:
         data = ser.read(size=1)
         if len(queue) < 1:
