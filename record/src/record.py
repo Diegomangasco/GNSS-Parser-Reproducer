@@ -23,12 +23,16 @@ def save_message(messages, res, timestamp, message_type):
     """
     # print(message_type)
     # print(res.hex())
-    data = {
-        "timestamp": timestamp,
-        "type": message_type,
-        "data": res.hex() if message_type in ["UBX", "Unknown"] else res.decode()
-    }
-    messages.append(data)
+    try:
+        data = {
+            "timestamp": timestamp,
+            "type": message_type,
+            "data": res.hex() if message_type in ["UBX", "Unknown"] else res.decode()
+        }
+        messages.append(data)
+    except:
+        print("Ignored message:",res)
+        print("Ignored message type:",message_type)
 
 def write_to_file(f, messages):
     """
@@ -39,7 +43,9 @@ def write_to_file(f, messages):
     - messages (list): The list of messages to write.
     """
     json_object = json.dumps(messages)
+    print("Writing to file...")
     f.write(json_object)
+    print("Done...")
     f.close()
 
 def setup_file(filename):
@@ -111,11 +117,21 @@ def main():
     previous_data = b''
     flat_time = time.time() * 1e6
 
+    null_cnt = 0
+
     print('Recording...');
     if end_time is not None:
         end_time = time.time() + end_time
     while True:
         data = ser.read(size=1)
+        # print(data)
+        if not data:
+            null_cnt = null_cnt + 1
+        else:
+            null_cnt = 0
+        if null_cnt > 10000:
+            print("Error. Serial stopped sending data...")
+            break
         if len(queue) < 1:
             previous_data = data
             queue += data
