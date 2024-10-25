@@ -37,12 +37,12 @@ It consists of three main scripts: `record/src/record.py`, `replay/src/replay.py
     ```
 
 4. Ensure `nodejs` is installed on your system:
-```sh
-    sudo apt install nodejs
-```
+    ```sh
+        sudo apt install nodejs
+    ```
 
 5. Install the npm packages:
-```sh
-    cd replay/vehicle_visualizer
-    npm install
-```
+    ```sh
+        cd replay/vehicle_visualizer
+        npm install
+    ```
