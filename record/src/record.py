@@ -31,8 +31,12 @@ def save_message(messages, res, timestamp, message_type):
         }
         messages.append(data)
     except:
-        print("Ignored message:",res)
-        print("Ignored message type:",message_type)
+        data = {
+            "timestamp": timestamp,
+            "type": "Unknown",
+            "data": res.hex()
+        }
+        messages.append(data)
 
 def write_to_file(f, messages):
     """
@@ -129,7 +133,7 @@ def main():
             null_cnt = null_cnt + 1
         else:
             null_cnt = 0
-        if null_cnt > 10000:
+        if null_cnt > 100000:
             print("Error. Serial stopped sending data...")
             break
         if len(queue) < 1:

@@ -4,7 +4,7 @@ import math
 from serial_emulator import SerialEmulator
 from decoded_messages import DecodedMessage
 
-CLUSTER_TSHOLD_MS = 40 # In [ms]
+CLUSTER_TSHOLD_MS = 20 # In [ms]
 
 def nmea_to_degrees(lat_or_lon, value, direction):
     # Split degrees and minutes
@@ -142,7 +142,7 @@ def main():
     if serial:
         # Creation of the serial emulator
         ser = SerialEmulator(device_port=server_device, client_port=client_device, baudrate=baudrate)
-    if gui:
+    if gui or test_rate:
         # Creation of the decoded message object
         decoder = DecodedMessage()
 
@@ -226,7 +226,10 @@ def main():
         if test_rate:
             test_rate_lat = None
             test_rate_lon = None
-            tmp_lat, tmp_lon, _ = decoder.extract_data(content, message_type)
+            if message_type == "UBX":
+                tmp_lat, tmp_lon, _ = decoder.extract_data(content, message_type)
+            else:
+                tmp_lat, tmp_lon, _ = decoder.extract_data(content.decode(), message_type)
             if tmp_lat:
                 test_rate_lat = tmp_lat
             if tmp_lon:
