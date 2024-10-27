@@ -133,7 +133,7 @@ def main():
             null_cnt = null_cnt + 1
         else:
             null_cnt = 0
-        if null_cnt > 100000:
+        if null_cnt > 500000:
             print("Error. Serial stopped sending data...")
             break
         if len(queue) < 1:

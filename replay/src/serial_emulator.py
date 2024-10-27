@@ -32,6 +32,8 @@ class SerialEmulator(object):
             bytesize=serial.EIGHTBITS,
             timeout=0
         )
+        print("Serial client options:")
+        print(self.serial_client)
         self.err = ''
         self.out = ''
 

@@ -194,6 +194,11 @@ def main():
     prev_latitude_deg = -8000
     prev_longitude_deg = -8000
 
+    ubx_nav_pvt_present=False
+    ubx_nav_att_present=False
+    ubx_esf_ins_present=False
+    ubx_esf_raw_present=False
+
     for d in data:
         before_time = time.time() * 1e6
         delta_time = d["timestamp"] - previous_time
@@ -227,6 +232,16 @@ def main():
             test_rate_lat = None
             test_rate_lon = None
             if message_type == "UBX":
+                # Check the UBX message type
+                if(content[2]==0x01 and content[3]==0x05):
+                    ubx_nav_pvt_present=True
+                elif(content[2]==0x01 and content[3]==0x07):
+                    ubx_nav_att_present=True
+                elif(content[2]==0x10 and content[3]==0x15):
+                    ubx_esf_ins_present=True
+                elif(content[2]==0x10 and content[3]==0x03):
+                    ubx_esf_raw_present=True
+
                 tmp_lat, tmp_lon, _ = decoder.extract_data(content, message_type)
             else:
                 tmp_lat, tmp_lon, _ = decoder.extract_data(content.decode(), message_type)
@@ -281,19 +296,32 @@ def main():
             before_time = time.time() * 1e6 - before_time
             if delta_time > before_time + after_time + variable_delta_us_factor:
                 # The delta time is diminished by three time factors
-                time.sleep((delta_time - before_time - after_time - variable_delta_us_factor) / 1e6)
+                try:
+                    time.sleep((delta_time - before_time - after_time - variable_delta_us_factor) / 1e6)
+                except:
+                    print("Trying to sleep for a negative time, thus not sleeping: ",(delta_time - before_time - after_time - variable_delta_us_factor) / 1e3)
             else:
                 factors = [before_time, after_time, variable_delta_us_factor]
                 factors.sort()
                 if delta_time > factors[0] + factors[1]:
                     # The delta time is diminished by two time factors
-                    time.sleep((delta_time - factors[0] - factors[1]) / 1e6)
+                    try:
+                        time.sleep((delta_time - factors[0] - factors[1]) / 1e6)
+                    except:
+                        print("Trying to sleep for a negative time, thus not sleeping: ",(delta_time - factors[0] - factors[1]) / 1e3)
                 elif delta_time > factors[0]:
                     # The delta time is diminished by one time factor
-                    time.sleep((delta_time - factors[0]) / 1e6)
+                    try:
+                        time.sleep((delta_time - factors[0]) / 1e6)
+                    except:
+                        print("Trying to sleep for a negative time, thus not sleeping: ",(delta_time - factors[0]) / 1e3)
                 else:
                     # The delta time is not diminished by any time factor
-                    time.sleep(delta_time / 1e6)
+                    try:
+                        time.sleep(delta_time / 1e6)
+                    except:
+                        print("Trying to sleep for a negative time, thus not sleeping: ",delta_time / 1e3)
+                    # print(delta_time / 1e3)
             if serial:
                 ser.write(content)
             # after_time represents the time passed from the end of the serial write to the end of the for loop
@@ -347,6 +375,12 @@ def main():
 
         print("Average update rate (filtered):", 1e3/average_update_time_filtered, "Hz")
         print("Average update periodicity (filtered):", average_update_time_filtered, "ms")
+
+        print("UBX messages statistics:")
+        print("UBX-NAV-PVT present:",ubx_nav_pvt_present)
+        print("UBX-NAV-ATT present:",ubx_nav_att_present)
+        print("UBX-ESF-INS present:",ubx_esf_ins_present)
+        print("UBX-ESF-RAW present:",ubx_esf_raw_present)
 
         np.savetxt('replay_out.csv', [p for p in zip(update_timestamps, update_msg_type, update_peridocities, update_rates, update_msg_clustered, update_msg_lat, update_msg_lon, update_msg_same_position)], delimiter=',', fmt='%s')
 
