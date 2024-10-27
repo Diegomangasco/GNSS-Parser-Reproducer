@@ -233,14 +233,15 @@ def main():
             test_rate_lon = None
             if message_type == "UBX":
                 # Check the UBX message type
-                if(content[2]==0x01 and content[3]==0x05):
-                    ubx_nav_pvt_present=True
-                elif(content[2]==0x01 and content[3]==0x07):
-                    ubx_nav_att_present=True
-                elif(content[2]==0x10 and content[3]==0x15):
-                    ubx_esf_ins_present=True
-                elif(content[2]==0x10 and content[3]==0x03):
-                    ubx_esf_raw_present=True
+                if(len(content)>=4):
+                    if(content[2]==0x01 and content[3]==0x05):
+                        ubx_nav_pvt_present=True
+                    elif(content[2]==0x01 and content[3]==0x07):
+                        ubx_nav_att_present=True
+                    elif(content[2]==0x10 and content[3]==0x15):
+                        ubx_esf_ins_present=True
+                    elif(content[2]==0x10 and content[3]==0x03):
+                        ubx_esf_raw_present=True
 
                 tmp_lat, tmp_lon, _ = decoder.extract_data(content, message_type)
             else:
