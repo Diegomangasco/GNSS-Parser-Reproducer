@@ -17,6 +17,7 @@ It consists of three main scripts: `record/src/record.py`, `replay/src/replay.py
 - pyserial
 - socat (for serial emulation)
 - nodejs (for the GUI mode)
+- can-utils
 
 ## Installation
 
@@ -45,6 +46,10 @@ It consists of three main scripts: `record/src/record.py`, `replay/src/replay.py
     ```sh
         cd replay/vehicle_visualizer
         npm install
+    ```
+6. Install the can-utils packages:
+    ```sh
+        sudo apt install can-utils
     ```
 
 ## Work-in-progress
