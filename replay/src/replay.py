@@ -3,6 +3,11 @@ import numpy as np
 import math
 from serial_emulator import SerialEmulator
 from decoded_messages import DecodedMessage
+import subprocess
+import re
+import glob
+import sys
+import os
 
 CLUSTER_TSHOLD_MS = 20 # In [ms]
 
@@ -120,18 +125,26 @@ def main():
     args.add_argument("--server_ip", type=str, help="The IP address of the server. Default is 127.0.0.1", default="127.0.0.1")
     args.add_argument("--server_port", type=int, help="The port of the server. Default is 48110", default=48110)
 
+    args.add_argument("--CAN", type=int, help="Whether to use canplayer. Default is False (0), can be activated with any other positive value", default=0)
+    args.add_argument("--CAN_device", type=str, help="The CAN device to write to", default="vcan0")
+    args.add_argument("--CAN_filename", type=str, help="The CAN file to read from", default="./data/CANlog.log")
+
     args = args.parse_args()
     filename = args.filename
     server_device = args.server_device
     client_device = args.client_device
     baudrate = args.baudrate
-    start_time = args.start_time
+    start_time = args.start_time * 1e6 if args.start_time else None
     end_time = args.end_time * 1e6 if args.end_time else None
     gui = args.gui
     serial = args.serial
     test_rate = args.test_rate
 
-    assert serial > 0 or gui > 0 or test_rate > 0, "At least one of the serial or GUI or test rate options must be activated"
+    CAN = args.CAN
+    CAN_device = args.CAN_device
+    CAN_filename = args.CAN_filename
+
+    assert serial > 0 or gui > 0 or test_rate > 0 or CAN > 0, "At least one of the serial or GUI or test rate or CAN options must be activated"
 
     if test_rate > 0 and (serial > 0 or gui > 0):
         "Error: test rate mode can be selected only when both --gui and --serial are set to 0"
@@ -152,11 +165,49 @@ def main():
     
     if start_time:
         # Filter the data to start from the specified time
-        start_time_micseconds = start_time * 1e6
+        start_time_micseconds = start_time
         assert start_time_micseconds < data[-1]["timestamp"], "The start time is greater than the last timestamp in the file"
         data = list(filter(lambda x: x["timestamp"] >= start_time_micseconds, data))
-    
-    previous_time = 0 if not start_time else start_time*1e6
+
+    CAN_player_init_time = time.time()
+    if CAN:
+        log_can_device = ""
+        init_time = 0.0
+        # remove the old candump tmp file
+        if os.path.exists('/tmp/tmp_candump.log'):
+            os.remove('/tmp/tmp_candump.log')
+        with open(CAN_filename, 'r') as file:
+            with open('/tmp/tmp_candump.log', 'w') as tmp_file:
+                for line in file:
+                    if 'can' in line and log_can_device == "":
+                        log_can_device = next(part for part in line.split() if 'can' in part)
+                    if start_time:
+                        parts = line.split()
+                        if len(parts) > 0 and parts[0].startswith('(') and parts[0].endswith(')'):
+                            timestamp = float(parts[0][1:-1])
+                            if init_time == 0.0:
+                                init_time = timestamp
+                                continue
+                            if timestamp - init_time >= (start_time/1e6):
+                                tmp_file.write(line)
+                            if end_time:
+                                if timestamp - init_time >= (end_time/1e6):
+                                    break
+
+        if start_time:
+            CAN_filename = '/tmp/tmp_candump.log'
+
+        canplayer_command = 'canplayer ' + CAN_device + '=' + log_can_device + ' -I ' + CAN_filename
+
+        try:
+            print(f"Starting canplayer, reading from log {CAN_filename}...")
+            candump_process = subprocess.Popen(canplayer_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            sys.exit(1)
+
+    previous_time = 0 if not start_time else start_time
     map_opened = False
 
     if gui:
@@ -200,6 +251,8 @@ def main():
     ubx_esf_raw_present=False
 
     for d in data:
+        if not gui and not serial and not test_rate:
+            break
         before_time = time.time() * 1e6
         delta_time = d["timestamp"] - previous_time
         message_type = d["type"]
@@ -326,13 +379,13 @@ def main():
             if serial:
                 ser.write(content)
             # after_time represents the time passed from the end of the serial write to the end of the for loop
-            after_time = time.time() * 1e6
+            after_time = time.time() * 1e6 
 
             # Calculate a variable delta time factor to adjust the time of the serial write to be as close as possible to a real time simulation
             # delta_time_us represents the real time in microseconds from the beginning of the simulation to the current time
             delta_time_us_real = time.time() * 1e6 - startup_time
             # start_time_us represents the time in microseconds from the beginning of the messages simulation to the start time selected by the user
-            start_time_us = start_time * 1e6 if start_time else 0
+            start_time_us = start_time if start_time else 0
             # delta_time_us_simulation represents the time in microseconds from the beginning of the messages simulation time to the current message time
             delta_time_us_simulation = d["timestamp"] - start_time_us
             # We want that the time of the serial write is as close as possible to the real time simulation
@@ -361,7 +414,7 @@ def main():
                 print(f"Error sending UDP message: {e}")
                 raise e
         previous_time = d["timestamp"]
-        if end_time and time.time() - startup_time > end_time:
+        if end_time and time.time()*1e6 - startup_time > end_time:
             break
         after_time = time.time() * 1e6 - after_time
 
@@ -384,6 +437,13 @@ def main():
         print("UBX-ESF-RAW present:",ubx_esf_raw_present)
 
         np.savetxt('replay_out.csv', [p for p in zip(update_timestamps, update_msg_type, update_peridocities, update_rates, update_msg_clustered, update_msg_lat, update_msg_lon, update_msg_same_position)], delimiter=',', fmt='%s')
+
+    if CAN:
+        print("Stopping canplayer...")
+        remaining = time.time() - CAN_player_init_time
+        if remaining < (end_time-start_time)/1e6:
+            time.sleep(((end_time-start_time)/1e6) - remaining)
+        candump_process.kill()
 
 if __name__ == "__main__":
     main()
