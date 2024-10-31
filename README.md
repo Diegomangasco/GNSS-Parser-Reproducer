@@ -54,5 +54,5 @@ It consists of three main scripts: `record/src/record.py`, `replay/src/replay.py
 
 ## Work-in-progress
 - [ ] Enable the reliable usage of baud rates higher than 115200
-- [ ] Make the record script more robust to issues that may stop the recording of the trace, making it save anyway what has been captured until that moment
+- [X] Make the record script more robust to issues that may stop the recording of the trace, making it save anyway what has been captured until that moment
 - [ ] CAN Database parsing
