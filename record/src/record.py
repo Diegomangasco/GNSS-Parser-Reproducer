@@ -1,5 +1,6 @@
 import serial, time, json, argparse
 import signal
+from collections import deque
 
 global terminatorFlag
 
@@ -21,8 +22,7 @@ def save_message(messages, res, timestamp, message_type):
     - timestamp (float): The timestamp of the message.
     - message_type (str): The type of the message (e.g., "NMEA", "UBX").
     """
-    # print(message_type)
-    # print(res.hex())
+    
     try:
         data = {
             "timestamp": timestamp,
@@ -36,6 +36,7 @@ def save_message(messages, res, timestamp, message_type):
             "type": "Unknown",
             "data": res.hex()
         }
+    finally:
         messages.append(data)
 
 def write_to_file(f, messages):
@@ -46,7 +47,7 @@ def write_to_file(f, messages):
     - f (file object): The file object to write to.
     - messages (list): The list of messages to write.
     """
-    json_object = json.dumps(messages)
+    json_object = json.dumps(list(messages))
     print("Writing to file...")
     f.write(json_object)
     print("Done...")
@@ -112,7 +113,7 @@ def main():
     
     f = setup_file(filename)
 
-    messages = list()
+    messages = deque()
     queue = b''
     ubx_flag = False
     ubx_timestamp = None
@@ -126,58 +127,62 @@ def main():
     print('Recording...');
     if end_time is not None:
         end_time = time.time() + end_time
-    while True:
-        data = ser.read(size=1)
-        # print(data)
-        if not data:
-            null_cnt = null_cnt + 1
-        else:
-            null_cnt = 0
-        if null_cnt > 500000:
-            print("Error. Serial stopped sending data...")
-            break
-        if len(queue) < 1:
-            previous_data = data
-            queue += data
-            continue
-        # Read the last two bytes of the queue
-        last_two_bytes = previous_data + data
-        if last_two_bytes == b'$G':
-            # A NMEA message is starting
-            if ubx_flag:
-                save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
-            elif len(queue) - 1 > 0:
-                save_message(messages, queue[:-1], unknown_timestamp - flat_time, "Unknown")
-            nmea_timestamp = time.time() * 1e6
-            queue = last_two_bytes
-            ubx_flag = False
-        elif last_two_bytes == b'\r\n':
-            # One message is ending
-            if not ubx_flag:
-                save_message(messages, queue + b'\n', nmea_timestamp - flat_time, "NMEA")
-            else:
-                save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
-                ubx_flag = False
-            queue = b''
-            unknown_timestamp = time.time() * 1e6
-        elif last_two_bytes == b'\xb5\x62':
-            # A UBX message is starting
-            if ubx_flag:
-                save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
-            elif len(queue) - 1 > 0:
-                save_message(messages, queue[:-1], unknown_timestamp - flat_time, "Unknown")
-            ubx_flag = True
-            ubx_timestamp = time.time() * 1e6
-            queue = last_two_bytes
-        else:
-            queue += data
-        t = time.time()
-        if (end_time is not None and t > end_time) or terminatorFlag:
-            break
-        previous_data = data
 
-    # Write the messages to the file
-    write_to_file(f, messages)
+    try:
+        while True:
+            data = ser.read(size=1)
+            # print(data)
+            if not data:
+                null_cnt += 1
+            else:
+                null_cnt = 0
+            if null_cnt > 500000:
+                print("Error. Serial stopped sending data...")
+                break
+            if len(queue) < 1:
+                previous_data = data
+                queue += data
+                continue
+            # Read the last two bytes of the queue
+            last_two_bytes = previous_data + data
+            if last_two_bytes == b'$G':
+                # A NMEA message is starting
+                if ubx_flag:
+                    save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
+                elif len(queue) - 1 > 0:
+                    save_message(messages, queue[:-1], unknown_timestamp - flat_time, "Unknown")
+                nmea_timestamp = time.time() * 1e6
+                queue = last_two_bytes
+                ubx_flag = False
+            elif last_two_bytes == b'\r\n':
+                # One message is ending
+                if not ubx_flag:
+                    save_message(messages, queue + b'\n', nmea_timestamp - flat_time, "NMEA")
+                else:
+                    save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
+                    ubx_flag = False
+                queue = b''
+                unknown_timestamp = time.time() * 1e6
+            elif last_two_bytes == b'\xb5\x62':
+                # A UBX message is starting
+                if ubx_flag:
+                    save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
+                elif len(queue) - 1 > 0:
+                    save_message(messages, queue[:-1], unknown_timestamp - flat_time, "Unknown")
+                ubx_flag = True
+                ubx_timestamp = time.time() * 1e6
+                queue = last_two_bytes
+            else:
+                queue += data
+            t = time.time()
+            if (end_time is not None and t > end_time) or terminatorFlag:
+                break
+            previous_data = data
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        # Write the messages to the file
+        write_to_file(f, messages)
 
 if __name__ == "__main__":
     main()
