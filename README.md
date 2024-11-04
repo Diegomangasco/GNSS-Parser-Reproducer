@@ -18,6 +18,7 @@ It consists of three main scripts: `record/src/record.py`, `replay/src/replay.py
 - socat (for serial emulation)
 - nodejs (for the GUI mode)
 - can-utils
+- cantools
 
 ## Installation
 
@@ -30,6 +31,7 @@ It consists of three main scripts: `record/src/record.py`, `replay/src/replay.py
 2. Install the required Python packages:
     ```sh
     pip install pyserial
+    pip install cantools
     ```
 
 3. Ensure `socat` is installed on your system:
@@ -51,6 +53,13 @@ It consists of three main scripts: `record/src/record.py`, `replay/src/replay.py
     ```sh
         sudo apt install can-utils
     ```
+
+## Authors
+- **Diego Gasco** - Politecnico di Torino - diego.gasco@polito.it
+- **Carlos Mateo Risma Carletti** - Politecnico di Torino - carlos.rismacarletti@polito.it
+- **Francesco Raviglione** - Politecnico di Torino - francesco.raviglione@polito.it
+- **Marco Rapelli** - Politecnico di Torino - marco.rapelli@polito.it
+- **Claudio Casetti** - Politecnico di Torino - claudio.casetti@polito.it
 
 ## Work-in-progress
 - [ ] Enable the reliable usage of baud rates higher than 115200

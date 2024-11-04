@@ -1,21 +1,21 @@
 import serial, time, json, argparse
 import signal
 from collections import deque
-import subprocess
-import re
-import glob
-import sys
-import os
+import cantools, can
+import threading
+import traceback
 
-global terminatorFlag
+TERMINATOR_FLAG = False
+CAN_WAIT_TIME = 200 # seconds
+NULL_CNT = 500000 # Number of null characters to wait before stopping the serial read
 
 def signal_handler(sig, frame):
     """
     Signal handler for the SIGINT signal.
     """
-    global terminatorFlag
+    global TERMINATOR_FLAG
     print('\nTerminating...');
-    terminatorFlag = True
+    TERMINATOR_FLAG = True
 
 def save_message(messages, res, timestamp, message_type):
     """
@@ -78,77 +78,62 @@ def setup_file(filename):
 def close_file(f):
     f.close()
 
-def main():
-    global terminatorFlag, candump_process
+def read_CAN_bus(CAN_device, CAN_filename, CAN_db, end_time):
     """
-    Main function to read data from a serial device and save it to a file.
+    Reads the CAN bus and writes the messages to a file.
     
-    Command-line Arguments:
-    - --device (str): The device to read from. Default is "/dev/ttyACM0".
-    - --filename (str): The file to write to. Default is "./data/outlog.json".
-    - --baudrate (int): The baudrate to read from. Default is 115200.
-    - --end_time (int): The time to stop reading in seconds. If not specified, will read indefinitely.
-
-    Example:
-    python record.py --device /dev/ttyACM0 --filename /home/outlog.json --baudrate 115200 --end_time 60
+    Parameters:
+    - CAN_device (str): The CAN device to read from.
+    - CAN_filename (str): The file to write to.
+    - CAN_db (str): The CAN database file.
     """
-    args = argparse.ArgumentParser()
-    args.add_argument("--device", type=str, help="The device to read from", default="/dev/ttyACM0")
-    args.add_argument("--filename", type=str, help="The file to write to", default="./data/outlog.json")
-    args.add_argument("--baudrate", type=int, help="The baudrate to read from", default=115200)
-    args.add_argument("--end_time", type=int, help="The time to stop reading in seconds, if not specified, will read indefinitely", default=None)
-
-    args.add_argument("--enable_CAN", type=bool, help="Enable CAN logging", default=False)
-    args.add_argument("--CAN_device", type=str, help="The CAN device to read from", default="can0")
-    args.add_argument("--CAN_filename", type=str, help="The CAN file to write to", default="./data/CANlog.log")
-
-    terminatorFlag = False
-    signal.signal(signal.SIGINT, signal_handler)
-
-    args = args.parse_args()
-    device = args.device
-    filename = args.filename
-    baudrate = args.baudrate
-    end_time = args.end_time
-
-    enable_CAN = args.enable_CAN
-    CAN_device = args.CAN_device
-    CAN_filename = args.CAN_filename
-
-    ser = serial.Serial(
-        port=device,
-        baudrate=int(baudrate),
-        parity=serial.PARITY_NONE,
-        stopbits=serial.STOPBITS_ONE,
-        bytesize=serial.EIGHTBITS,
-        timeout=0
-    )
-
-    if enable_CAN:
-        candump_command = 'candump -ta -l ' + CAN_device
-
-        try:
-            print(f"Starting candump, logging to {CAN_filename}...")
-            candump_process = subprocess.Popen(candump_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            time.sleep(1)
-            log_files_pattern = os.path.join(".", "candump-*.log")
-            log_files = glob.glob(log_files_pattern)
-
-            # Check if there are any matching files
-            if not log_files:
-                print("No candump log files found.")
+    can_messages = deque()
+    try:
+        f = setup_file(CAN_filename)
+        print("Reading CAN bus...")
+        db_can = cantools.database.load_file(CAN_db)
+        message_ids = [m.frame_id for m in db_can.messages]
+        can_bus = can.interface.Bus(channel=CAN_device, interface='socketcan')
+        while True:
+            message = can_bus.recv(CAN_WAIT_TIME)
+            if message.arbitration_id not in message_ids:
+                continue
+            if message:
+                decoded_message = db_can.decode_message(message.arbitration_id, message.data)
+                decoded_message = {k: (v.value if isinstance(v, cantools.database.can.signal.NamedSignalValue) else v) for k, v in decoded_message.items()}
+                object = {
+                    "timestamp": message.timestamp,
+                    "arbitration_id": message.arbitration_id,
+                    "data": decoded_message
+                }
+                can_messages.append(object)
             else:
-                # Sort the files by modification time, and pick the last one
-                latest_log_file = max(log_files, key=os.path.getmtime)
-                candump_logfile_name = latest_log_file
+                # Terminate the thread if no messages are received
+                print("Expired waiting time for CAN bus messages")
+                break
+            t = time.time()
+            if (end_time is not None and t > end_time) or TERMINATOR_FLAG:
+                break
+    except Exception as e:
+        print(f"An error occurred in reading CAN bus: {e}")
+        traceback.print_exc()
+    finally:
+        # Check if there are any messages to write
+        if len(can_messages) > 0:
+            write_to_file(f, can_messages)
+        can_bus.shutdown()
 
+def read_serial(serial_filename, ser, end_time):
+    """
+    Reads data from a serial device and writes the messages to a file.
 
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            sys.exit(1)
+    Parameters:
+    - serial_filename (str): The file to write to.
+    - ser (serial.Serial): The serial object to read from.
+    - end_time (int): The time to stop reading in seconds.
 
-    f = setup_file(filename)
-
+    """
+    f = setup_file(serial_filename)
     messages = deque()
     queue = b''
     ubx_flag = False
@@ -160,7 +145,7 @@ def main():
 
     null_cnt = 0
 
-    print('Recording...');
+    print('Recording GNSS...');
     if end_time is not None:
         end_time = time.time() + end_time
 
@@ -172,7 +157,7 @@ def main():
                 null_cnt += 1
             else:
                 null_cnt = 0
-            if null_cnt > 500000:
+            if null_cnt > NULL_CNT:
                 print("Error. Serial stopped sending data...")
                 break
             if len(queue) < 1:
@@ -211,7 +196,7 @@ def main():
             else:
                 queue += data
             t = time.time()
-            if (end_time is not None and t > end_time) or terminatorFlag:
+            if (end_time is not None and t > end_time) or TERMINATOR_FLAG:
                 break
             previous_data = data
     except Exception as e:
@@ -219,8 +204,69 @@ def main():
     finally:
         # Write the messages to the file
         write_to_file(f, messages)
-        if enable_CAN:
-            candump_process.kill()
+
+def main():
+    """
+    Main function to read data from a serial device and save it to a file.
+    
+    Command-line Arguments:
+    - --device (str): The device to read from. Default is "/dev/ttyACM0".
+    - --filename (str): The file to write to. Default is "./data/outlog.json".
+    - --baudrate (int): The baudrate to read from. Default is 115200.
+    - --end_time (int): The time to stop reading in seconds. If not specified, will read indefinitely.
+
+    Example:
+    python record.py --enable_serial True --device /dev/ttyACM0 --filename /data/gnss_output/outlog.json --baudrate 115200 --enable_CAN True --CAN_device vcan0 --CAN_filename /data/can_output/CANlog.json --CAN_db /data/can_db/motohawk.dbc --end_time 60
+    """
+    args = argparse.ArgumentParser()
+    args.add_argument("--enable_serial", type=bool, help="Enable serial logging", default=False)
+    args.add_argument("--device", type=str, help="The device to read from", default="/dev/ttyACM0")
+    args.add_argument("--serial_filename", type=str, help="The file to write to", default="./data/gnss_output/outlog.json")
+    args.add_argument("--baudrate", type=int, help="The baudrate to read from", default=115200)
+    args.add_argument("--end_time", type=int, help="The time to stop reading in seconds, if not specified, will read indefinitely", default=None)
+    args.add_argument("--enable_CAN", type=bool, help="Enable CAN logging", default=False)
+    args.add_argument("--CAN_device", type=str, help="The CAN device to read from", default="vcan0")
+    args.add_argument("--CAN_filename", type=str, help="The CAN file to write to", default="./data/can_output/CANlog.json")
+    args.add_argument("--CAN_db", type=str, help="The CAN database file", default="./data/can_db/motohawk.dbc")
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    args = args.parse_args()
+    enable_serial = args.enable_serial
+    enable_CAN = args.enable_CAN
+
+    assert enable_serial or enable_CAN, "At least one of serial or CAN logging must be enabled"
+
+    end_time = args.end_time
+
+    candump_thread = None
+    
+    if enable_CAN:
+        CAN_device = args.CAN_device
+        CAN_filename = args.CAN_filename
+        CAN_db = args.CAN_db
+        # Start thread to read CAN bus
+        candump_thread = threading.Thread(target=read_CAN_bus, args=(CAN_device, CAN_filename, CAN_db, end_time))
+        # Set the thread as a daemon so it will be killed when the main thread exits
+        candump_thread.daemon = True
+        candump_thread.start()
+
+    if enable_serial:
+        device = args.device
+        serial_filename = args.serial_filename
+        baudrate = args.baudrate
+        ser = serial.Serial(
+            port=device,
+            baudrate=int(baudrate),
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            bytesize=serial.EIGHTBITS,
+            timeout=0
+        )
+        # Start the read serial function
+        read_serial(serial_filename, ser, end_time)
+    if enable_CAN:
+        candump_thread.join()
 
 if __name__ == "__main__":
     main()
