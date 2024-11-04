@@ -1,6 +1,11 @@
 import serial, time, json, argparse
 import signal
 from collections import deque
+import subprocess
+import re
+import glob
+import sys
+import os
 
 global terminatorFlag
 
@@ -74,7 +79,7 @@ def close_file(f):
     f.close()
 
 def main():
-    global terminatorFlag
+    global terminatorFlag, candump_process
     """
     Main function to read data from a serial device and save it to a file.
     
@@ -93,6 +98,10 @@ def main():
     args.add_argument("--baudrate", type=int, help="The baudrate to read from", default=115200)
     args.add_argument("--end_time", type=int, help="The time to stop reading in seconds, if not specified, will read indefinitely", default=None)
 
+    args.add_argument("--enable_CAN", type=bool, help="Enable CAN logging", default=False)
+    args.add_argument("--CAN_device", type=str, help="The CAN device to read from", default="can0")
+    args.add_argument("--CAN_filename", type=str, help="The CAN file to write to", default="./data/CANlog.log")
+
     terminatorFlag = False
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -102,6 +111,10 @@ def main():
     baudrate = args.baudrate
     end_time = args.end_time
 
+    enable_CAN = args.enable_CAN
+    CAN_device = args.CAN_device
+    CAN_filename = args.CAN_filename
+
     ser = serial.Serial(
         port=device,
         baudrate=int(baudrate),
@@ -110,7 +123,30 @@ def main():
         bytesize=serial.EIGHTBITS,
         timeout=0
     )
-    
+
+    if enable_CAN:
+        candump_command = 'candump -ta -l ' + CAN_device
+
+        try:
+            print(f"Starting candump, logging to {CAN_filename}...")
+            candump_process = subprocess.Popen(candump_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            time.sleep(1)
+            log_files_pattern = os.path.join(".", "candump-*.log")
+            log_files = glob.glob(log_files_pattern)
+
+            # Check if there are any matching files
+            if not log_files:
+                print("No candump log files found.")
+            else:
+                # Sort the files by modification time, and pick the last one
+                latest_log_file = max(log_files, key=os.path.getmtime)
+                candump_logfile_name = latest_log_file
+
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            sys.exit(1)
+
     f = setup_file(filename)
 
     messages = deque()
@@ -183,6 +219,8 @@ def main():
     finally:
         # Write the messages to the file
         write_to_file(f, messages)
+        if enable_CAN:
+            candump_process.kill()
 
 if __name__ == "__main__":
     main()
