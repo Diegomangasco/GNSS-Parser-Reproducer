@@ -53,7 +53,7 @@ class DecodedMessage:
     def __init__(self):
         pass
 
-    def extract_data(self, content, message_type):
+    def extract_data(self, content, message_type, direction=None):
         """
         Extracts the latitude, longitude, and heading.
         """
@@ -72,6 +72,8 @@ class DecodedMessage:
                     degrees = int(lat_split[0][:-2])
                     minutes = float(lat_split[0][-2:] + "." + lat_split[1])
                     lat = degrees + minutes/60
+                    if direction is not None and direction ['S', 'W']:
+                        lat = - lat
                 else:
                     lat = float(values[self.NMEA_MESSAGES[dict_key]["lat"]])
             else:
@@ -83,6 +85,8 @@ class DecodedMessage:
                     degrees = int(lon_split[0][:-2])
                     minutes = float(lon_split[0][-2:] + "." + lon_split[1])
                     lon = degrees + minutes/60
+                    if direction is not None and direction in ['S', 'W']:
+                        lon = - lon
                 else:
                     lon = float(values[self.NMEA_MESSAGES[dict_key]["lon"]])
             else:
@@ -103,4 +107,21 @@ class DecodedMessage:
             lat = None if lat_offset is None else int.from_bytes(content[lat_offset+6:lat_offset+10], byteorder='little', signed=True) / 1e7
             lon = None if lon_offset is None else int.from_bytes(content[lon_offset+6:lon_offset+10], byteorder='little', signed=True) / 1e7
             heading = None if heading_offset is None else int.from_bytes(content[heading_offset+6:heading_offset+10], byteorder='little', signed=True) / 1e5
+        
         return lat, lon, heading
+    
+    def get_ubx_message_type(self, content):
+        """
+        Returns the UBX message type.
+        """
+        if(len(content)>=4):
+            if(content[2]==0x01 and content[3]==0x05):
+                return "NAV-PVT"
+            elif(content[2]==0x01 and content[3]==0x07):
+                return "NAV-ATT"
+            elif(content[2]==0x10 and content[3]==0x15):
+                return "ESF-INS"
+            elif(content[2]==0x10 and content[3]==0x03):
+                return "ESF-RAW"
+        else:
+            return None

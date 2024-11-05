@@ -1,4 +1,4 @@
-import serial, time, json, argparse
+import serial, time, json, argparse, os
 import signal
 from collections import deque
 import cantools, can
@@ -131,7 +131,6 @@ def read_serial(serial_filename, ser, end_time):
     - serial_filename (str): The file to write to.
     - ser (serial.Serial): The serial object to read from.
     - end_time (int): The time to stop reading in seconds.
-
     """
     f = setup_file(serial_filename)
     messages = deque()
@@ -210,24 +209,30 @@ def main():
     Main function to read data from a serial device and save it to a file.
     
     Command-line Arguments:
+    - --enable_serial (bool): Enable serial logging. Default is False. Can be activated by writing it.
     - --device (str): The device to read from. Default is "/dev/ttyACM0".
-    - --filename (str): The file to write to. Default is "./data/outlog.json".
+    - --serial_filename (str): The file to write to. Default is "./data/outlog.json".
     - --baudrate (int): The baudrate to read from. Default is 115200.
     - --end_time (int): The time to stop reading in seconds. If not specified, will read indefinitely.
+    - --enable_CAN (bool): Enable CAN logging. Default is False. Can be activated by writing it.
+    - --CAN_device (str): The CAN device to read from. Default is "vcan0".
+    - --CAN_filename (str): The CAN file to write to. Default is "./data/CANlog.json".
+    - --CAN_db (str): The CAN database file. Default is "./data/motohawk.dbc".
 
     Example:
-    python record.py --enable_serial True --device /dev/ttyACM0 --filename /data/gnss_output/outlog.json --baudrate 115200 --enable_CAN True --CAN_device vcan0 --CAN_filename /data/can_output/CANlog.json --CAN_db /data/can_db/motohawk.dbc --end_time 60
+    python3 record.py --enable_serial --device=/dev/ttyACM0 --serial_filename=./data/outlog.json --baudrate=115200 --end_time=10 --enable_CAN --CAN_device=vcan0 --CAN_filename=./data/CANlog.json --CAN_db=./data/motohawk.db
     """
     args = argparse.ArgumentParser()
-    args.add_argument("--enable_serial", type=bool, help="Enable serial logging", default=False)
+    args.add_argument("--enable_serial", action="store_true", help="Enable serial logging")
     args.add_argument("--device", type=str, help="The device to read from", default="/dev/ttyACM0")
     args.add_argument("--serial_filename", type=str, help="The file to write to", default="./data/gnss_output/outlog.json")
     args.add_argument("--baudrate", type=int, help="The baudrate to read from", default=115200)
     args.add_argument("--end_time", type=int, help="The time to stop reading in seconds, if not specified, will read indefinitely", default=None)
-    args.add_argument("--enable_CAN", type=bool, help="Enable CAN logging", default=False)
+    args.add_argument("--enable_CAN", action="store_true", help="Enable CAN logging")
     args.add_argument("--CAN_device", type=str, help="The CAN device to read from", default="vcan0")
     args.add_argument("--CAN_filename", type=str, help="The CAN file to write to", default="./data/can_output/CANlog.json")
     args.add_argument("--CAN_db", type=str, help="The CAN database file", default="./data/can_db/motohawk.dbc")
+
 
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -240,7 +245,7 @@ def main():
     end_time = args.end_time
 
     candump_thread = None
-    
+
     if enable_CAN:
         CAN_device = args.CAN_device
         CAN_filename = args.CAN_filename
@@ -265,6 +270,7 @@ def main():
         )
         # Start the read serial function
         read_serial(serial_filename, ser, end_time)
+
     if enable_CAN:
         candump_thread.join()
 
