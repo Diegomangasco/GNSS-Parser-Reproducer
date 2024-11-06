@@ -233,7 +233,10 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
         if serial:
             ser.stop()
             print("Time to send all messages:", time.time() - first_send, "s")
-            print("Difference to the last message:", time.time() - first_send - d["timestamp"] / 1e6, "s")
+            if start_time:
+                print("Difference to the last message:", time.time() - first_send - d["timestamp"] - start_time / 1e6, "s")
+            else:
+                print("Difference to the last message:", time.time() - first_send - d["timestamp"] / 1e6, "s")
         if gui:
             visualizer.stop_server(server_ip, server_port)
         if test_rate:
@@ -297,8 +300,11 @@ def write_CAN(device, filename, db_file, start_time, end_time, gui, visualizer, 
         print(f"Error: {e}")
     finally:
         bus.shutdown()
-        print("Time to send all messages:", time.time() - first_send)
-        print("Difference to the last message:", time.time() - first_send - d["timestamp"] / 1e6)
+        print("Time to send all messages:", time.time() - first_send, "s")
+        if start_time:
+            print("Difference to the last message:", time.time() - first_send - d["timestamp"] - start_time / 1e6, "s")
+        else:
+            print("Difference to the last message:", time.time() - first_send - d["timestamp"] / 1e6, "s")
         if gui:
             visualizer.stop_server(server_ip, server_port)
 
