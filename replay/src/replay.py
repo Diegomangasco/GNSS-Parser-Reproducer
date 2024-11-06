@@ -3,7 +3,7 @@ import numpy as np
 import math
 from serial_emulator import SerialEmulator
 from decoded_messages import DecodedMessage
-from ...vehicle_visualizer.visualizer import Visualizer
+from visualizer import Visualizer
 import os
 import cantools, can
 
@@ -64,38 +64,6 @@ def print_test_rate_stats(average_update_time, average_update_time_filtered, ubx
     print("UBX-ESF-INS present:",ubx_esf_ins_present)
     print("UBX-ESF-RAW present:",ubx_esf_raw_present)
 
-def real_time_waiting(delta_time, before_time, after_time, variable_delta_us_factor):
-    """
-    Waits for the real time to be as close as possible to the simulation time.
-    """
-    if delta_time > before_time + after_time + variable_delta_us_factor:
-        # The delta time is diminished by three time factors
-        try:
-            time.sleep((delta_time - before_time - after_time - variable_delta_us_factor) / 1e6)
-        except:
-            print("Trying to sleep for a negative time, thus not sleeping: ",(delta_time - before_time - after_time - variable_delta_us_factor) / 1e3)
-    else:
-        factors = [before_time, after_time, variable_delta_us_factor]
-        factors.sort()
-        if delta_time > factors[0] + factors[1]:
-            # The delta time is diminished by two time factors
-            try:
-                time.sleep((delta_time - factors[0] - factors[1]) / 1e6)
-            except:
-                print("Trying to sleep for a negative time, thus not sleeping: ", (delta_time - factors[0] - factors[1]) / 1e3)
-        elif delta_time > factors[0]:
-            # The delta time is diminished by one time factor
-            try:
-                time.sleep((delta_time - factors[0]) / 1e6)
-            except:
-                print("Trying to sleep for a negative time, thus not sleeping: ", (delta_time - factors[0]) / 1e3)
-        else:
-            # The delta time is not diminished by any time factor
-            try:
-                time.sleep(delta_time / 1e6)
-            except:
-                print("Trying to sleep for a negative time, thus not sleeping: ", delta_time / 1e3)
-
 def serial_test_rate(server_device, client_device, baudrate, filename, start_time, end_time, gui, serial, test_rate, server_ip, server_port, fifo_path, visualizer):
     """
     Writes the data from the file to the serial device or does a test rate analysis.
@@ -121,7 +89,6 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
         before_time = 0
         after_time = 0
         variable_delta_us_factor = 0
-        startup_time = time.time() * 1e6
         previous_pos_time = previous_time
         delta_pos_time = 0
         average_update_time = 0
@@ -145,10 +112,11 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
         ubx_esf_ins_present=False
         ubx_esf_raw_present=False
 
+        first_send = None
+        startup_time = time.time() * 1e6
         for d in data:
             if not gui and not serial and not test_rate:
                 break
-            before_time = time.time() * 1e6
             delta_time = d["timestamp"] - previous_time
             message_type = d["type"]
             if message_type == "Unknown":
@@ -197,9 +165,9 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                 delta_pos_time = d["timestamp"] - previous_pos_time
 
                 if message_type == "UBX":
-                    print("Time since last update (UBX):",delta_pos_time/1e3,"Time:",d["timestamp"]/1e3)
+                    print("Time since last update (UBX):", delta_pos_time/1e3, "Time:", d["timestamp"]/1e3)
                 else:
-                    print("Time since last update (NMEA):",delta_pos_time/1e3,"Time:",d["timestamp"]/1e3)
+                    print("Time since last update (NMEA):", delta_pos_time/1e3, "Time:", d["timestamp"]/1e3)
                 
                 print("Latitude [deg]:", test_rate_lat, "Longitude [deg]:", test_rate_lon)
 
@@ -234,14 +202,6 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                 update_msg_lat.append(test_rate_lat)
                 update_msg_lon.append(test_rate_lon)
             else:
-                # before_time represents the time passed from the beginning of the for loop to the beginning of the serial write
-                before_time = time.time() * 1e6 - before_time
-                real_time_waiting(delta_time, before_time, after_time, variable_delta_us_factor)
-                if serial:
-                    ser.write(content)
-                # after_time represents the time passed from the end of the serial write to the end of the for loop
-                after_time = time.time() * 1e6 
-
                 # Calculate a variable delta time factor to adjust the time of the serial write to be as close as possible to a real time simulation
                 # delta_time_us represents the real time in microseconds from the beginning of the simulation to the current time
                 delta_time_us_real = time.time() * 1e6 - startup_time
@@ -252,19 +212,28 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                 # We want that the time of the serial write is as close as possible to the real time simulation
                 # variable_delta_us_factor represents the difference between the simulation time and the real time
                 # It should be as close as possible to 0 and it is used to adjust the waiting time for the serial write
-                variable_delta_us_factor = abs(delta_time_us_simulation - delta_time_us_real)
-
+                variable_delta_us_factor = delta_time_us_simulation - delta_time_us_real
+                try:
+                    # Wait for the real time to be as close as possible to the simulation time
+                    time.sleep(variable_delta_us_factor / 1e6)
+                except:
+                    print("Trying to sleep for a negative time, thus not sleeping: ", variable_delta_us_factor / 1e3)
+                if serial:
+                    ser.write(content)
+                    if first_send is None:
+                        first_send = time.time()
             if gui and latitude and longitude:
                 manage_map(fifo_path, latitude, longitude, heading, server_ip, server_port, visualizer, map_opened)
             previous_time = d["timestamp"]
-            if end_time and time.time()*1e6 - startup_time > end_time:
+            if end_time and time.time() * 1e6 - startup_time > end_time:
                 break
-            after_time = time.time() * 1e6 - after_time
     except Exception as e:
         print(f"Error: {e}")
     finally:
         if serial:
             ser.stop()
+            print("Time to send all messages:", time.time() - first_send, "s")
+            print("Difference to the last message:", time.time() - first_send - d["timestamp"] / 1e6, "s")
         if gui:
             visualizer.stop_server(server_ip, server_port)
         if test_rate:
@@ -277,6 +246,7 @@ def write_CAN(device, filename, db_file, start_time, end_time, gui, visualizer, 
     Writes the data from the file to the CAN device.
     """
     try:
+        first_send = None
         f = open(filename, "r")
         data = json.load(f)
         f.close()
@@ -288,12 +258,9 @@ def write_CAN(device, filename, db_file, start_time, end_time, gui, visualizer, 
         # Create the CAN bus
         bus = can.interface.Bus(channel=device, interface='socketcan')
         previous_time = 0 if not start_time else start_time
-        before_time = 0
-        after_time = 0
         variable_delta_us_factor = 0
         startup_time = time.time() * 1e6
         for d in data:
-            before_time = time.time() * 1e6
             delta_time = d["timestamp"] - previous_time
             arbitration_id = d["arbitration_id"]
             content = d["data"]
@@ -301,31 +268,37 @@ def write_CAN(device, filename, db_file, start_time, end_time, gui, visualizer, 
             message = db.get_message_by_frame_id(arbitration_id)
             if message:
                 # Encode the content of the message
-                data = message.encode(content)
+                data = db.encode_message(message.frame_id, content)
                 final_message = can.Message(arbitration_id=message.frame_id, data=data)
-                before_time = time.time() * 1e6 - before_time
-                # Wait for the real time to be as close as possible to the simulation time
-                real_time_waiting(delta_time, before_time, after_time, variable_delta_us_factor)
-                # Write the message to the CAN bus
-                bus.send(final_message)
-                if gui:
-                    # TODO implement the visualization of the CAN messages
-                    pass
             start_time_us = start_time if start_time else 0
             # Calculate the delta time in the recording between the current message and the start time
             delta_time_us_simulation = d["timestamp"] - start_time_us
             # Calculate the real time in microseconds from the beginning of the simulation to the current time
             delta_time_us_real = time.time() * 1e6 - startup_time
             # Update the variable_delta_time_us_factor to adjust the time of the CAN write to be as close as possible to a real time simulation
-            variable_delta_us_factor = abs(delta_time_us_simulation - delta_time_us_real)
+            variable_delta_us_factor = delta_time_us_simulation - delta_time_us_real
+            try:
+                # Wait for the real time to be as close as possible to the simulation time
+                time.sleep(variable_delta_us_factor / 1e6)
+            except:
+                print("Trying to sleep for a negative time, thus not sleeping: ", variable_delta_us_factor / 1e3)
+            if message:
+                # Write the message to the CAN bus
+                if first_send is None:
+                    first_send = time.time()
+                bus.send(final_message)
+            if gui:
+                # TODO implement the visualization of the CAN messages
+                pass
             previous_time = d["timestamp"]
-            if end_time and time.time()*1e6 - startup_time > end_time:
+            if end_time and time.time() * 1e6 - startup_time > end_time:
                 break
-            after_time = time.time() * 1e6 - after_time
     except Exception as e:
         print(f"Error: {e}")
     finally:
         bus.shutdown()
+        print("Time to send all messages:", time.time() - first_send)
+        print("Difference to the last message:", time.time() - first_send - d["timestamp"] / 1e6)
         if gui:
             visualizer.stop_server(server_ip, server_port)
 
@@ -392,26 +365,31 @@ def main():
     start_time = args.start_time * 1e6 if args.start_time else None
     end_time = args.end_time * 1e6 if args.end_time else None
     gui = args.enable_gui
+    httpport = args.httpport
+    server_ip = args.server_ip
+    server_port = args.server_port
     test_rate = args.enable_test_rate
 
     CAN = args.enable_CAN
+    CAN = True # For testing purposes
     CAN_db = args.CAN_db
+    CAN_db = "./data/can_db/PCAN.dbc" # For testing purposes
     CAN_device = args.CAN_device
     CAN_filename = args.CAN_filename
+    CAN_filename = "./data/can_output/CANlog.json" # For testing purposes
 
     assert serial > 0 or gui > 0 or test_rate > 0 or CAN > 0, "At least one of the serial or GUI or test rate or CAN options must be activated"
 
     if test_rate > 0 and (serial > 0 or gui > 0):
         "Error: test rate mode can be selected only when both --gui and --serial are set to 0"
         exit(1)
+
+    visualizer = None
     
     if gui or test_rate:
         # Creation of the visualizer object
         visualizer = Visualizer()
         # If GUI modality is activated, start the nodejs server
-        httpport = args.httpport
-        server_ip = args.server_ip
-        server_port = args.server_port
         fifo_path = "./replay/fifo"
         if not os.path.exists(fifo_path):
             os.mkfifo(fifo_path)
