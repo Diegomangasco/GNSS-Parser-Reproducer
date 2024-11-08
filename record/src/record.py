@@ -163,6 +163,7 @@ def read_serial(serial_filename, ser, end_time):
         end_time = time.time() + end_time
 
     try:
+        first_message = True
         flat_time = time.time() * 1e6
         while True:
             data = ser.read(size=1)
@@ -174,6 +175,10 @@ def read_serial(serial_filename, ser, end_time):
             if null_cnt > NULL_CNT:
                 print("Error. Serial stopped sending data...")
                 break
+            if first_message:
+                # Set the first timestamp in case the first message is an unknown message
+                unknown_timestamp = time.time() * 1e6
+                first_message = False
             if len(queue) < 1:
                 previous_data = data
                 queue += data
@@ -183,26 +188,38 @@ def read_serial(serial_filename, ser, end_time):
             if last_two_bytes == b'$G':
                 # A NMEA message is starting
                 if ubx_flag:
+                    # If there is a previous UBX message, save it
                     save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
                 elif len(queue) - 1 > 0:
+                    # If there is a previous unknown message, save it
                     save_message(messages, queue[:-1], unknown_timestamp - flat_time, "Unknown")
                 nmea_timestamp = time.time() * 1e6
                 queue = last_two_bytes
                 ubx_flag = False
             elif last_two_bytes == b'\r\n':
-                # One message is ending
+                # Maybe one message is ending
                 if not ubx_flag:
-                    save_message(messages, queue + b'\n', nmea_timestamp - flat_time, "NMEA")
+                    # A NMEA message is ending or an unknown message is present
+                    first_two_bytes = queue[:2]
+                    if first_two_bytes == b'$G':
+                        # This is a NMEA message, so we save it
+                        save_message(messages, queue + b'\n', nmea_timestamp - flat_time, "NMEA")
+                        queue = b''
+                        # We don't know the nature of the next message, so we set the unknown timestamp
+                        unknown_timestamp = time.time() * 1e6
+                    else:
+                        # This is an unknown message, so we keep reading
+                        queue += data
                 else:
-                    save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
-                    ubx_flag = False
-                queue = b''
-                unknown_timestamp = time.time() * 1e6
+                    # This is the continuation of a UBX message, so we keep reading
+                    queue += data
             elif last_two_bytes == b'\xb5\x62':
                 # A UBX message is starting
                 if ubx_flag:
+                    # If there is a previous UBX message, save it
                     save_message(messages, queue[:-1], ubx_timestamp - flat_time, "UBX")
                 elif len(queue) - 1 > 0:
+                    # If there is a previous unknown message, save it
                     save_message(messages, queue[:-1], unknown_timestamp - flat_time, "Unknown")
                 ubx_flag = True
                 ubx_timestamp = time.time() * 1e6

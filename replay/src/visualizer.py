@@ -22,7 +22,7 @@ class Visualizer:
         Starts the nodejs server for the vehicle visualizer.
         """
         try:
-            os.system(f"node ./replay/vehicle_visualizer/server.js {httpport} {ip} {port} {fifo_path} &")
+            os.system(f"node ./vehicle_visualizer/server.js {httpport} {ip} {port} {fifo_path} &")
         except Exception as e:
             print(f"Error starting nodejs server: {e}")
             raise e
