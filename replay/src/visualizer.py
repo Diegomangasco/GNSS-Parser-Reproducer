@@ -27,12 +27,20 @@ class Visualizer:
             print(f"Error starting nodejs server: {e}")
             raise e
 
-    def send_object_udp_message(lat, lon, heading, server_ip, server_port):
+    def send_object_udp_message(GNSS_flag, CAN_flag, lat, lon, heading, server_ip, server_port):
         """
         Sends a UDP message with the latitude, longitude, and heading to the specified server.
         """
-        id = 1
-        station_type = 5
+        assert GNSS_flag or CAN_flag, "At least one of GNSS_flag or CAN"
+        id = -1
+        station_type = -1
+        if GNSS_flag:
+            id = 1
+            station_type = 5
+        elif CAN_flag:
+            # TODO - Manage different object ids and station types
+            id = 2
+            station_type = 6
         if not heading:
             heading = 361
         message = f"object,{id},{lat},{lon},{station_type},{heading}"

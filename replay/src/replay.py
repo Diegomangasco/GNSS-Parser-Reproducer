@@ -8,6 +8,7 @@ import os
 import cantools, can
 
 CLUSTER_TSHOLD_MS = 20 # In [ms]
+MAP_OPENED = False
 
 def compare_floats(a, b):
     return math.isclose(a, b, rel_tol=1e-8)
@@ -31,23 +32,24 @@ def set_ubx_flag(ubx_type):
             # print("Unknown UBX message type:", ubx_type)
             return False, False, False, False
         
-def manage_map(fifo_path, latitude, longitude, heading, server_ip, server_port, visualizer, map_opened):
+def manage_map(GNSS_flag, CAN_flag, fifo_path, latitude, longitude, heading, server_ip, server_port, visualizer):
+    global MAP_OPENED
     try:
-        if not map_opened:
+        if not MAP_OPENED:
             # Open the map GUI after the nodejs server is ready
             fp = open(fifo_path, 'r')
             info = fp.read()
             if "ready" not in info:
                 raise Exception("Error opening map GUI")
             visualizer.open_map_gui(latitude, longitude, server_ip, server_port)
-            map_opened = True
+            MAP_OPENED = True
             print("It is possible to open the map GUI at http://localhost:8080")
     except Exception as e:
         print(f"Error opening map GUI: {e}")
         raise e
     try:
         # Send the new object position to the server that will update the map GUI
-        visualizer.send_object_udp_message(latitude, longitude, heading, server_ip, server_port)
+        visualizer.send_object_udp_message(GNSS_flag, CAN_flag, latitude, longitude, heading, server_ip, server_port)
     except Exception as e:
         print(f"Error sending UDP message: {e}")
         raise e
@@ -81,13 +83,13 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
             data = filter_by_start_time(data, start_time)
 
         previous_time = 0 if not start_time else start_time
-        map_opened = False
+       
+        GNSS_flag = True
+        CAN_flag = False
 
         latitude = None
         longitude = None    
         heading = None
-        before_time = 0
-        after_time = 0
         variable_delta_us_factor = 0
         previous_pos_time = previous_time
         delta_pos_time = 0
@@ -223,7 +225,7 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                     if first_send is None:
                         first_send = time.time()
             if gui and latitude and longitude:
-                manage_map(fifo_path, latitude, longitude, heading, server_ip, server_port, visualizer, map_opened)
+                manage_map(GNSS_flag, CAN_flag, fifo_path, latitude, longitude, heading, server_ip, server_port, visualizer)
             previous_time = d["timestamp"]
             if end_time and time.time() * 1e6 - startup_time > end_time:
                 break
@@ -291,7 +293,7 @@ def write_CAN(device, filename, db_file, start_time, end_time, gui, visualizer, 
                     first_send = time.time()
                 bus.send(final_message)
             if gui:
-                # TODO implement the visualization of the CAN messages
+                # TODO - Implement the visualization of the CAN messages through manage_map function
                 pass
             previous_time = d["timestamp"]
             if end_time and time.time() * 1e6 - startup_time > end_time:
