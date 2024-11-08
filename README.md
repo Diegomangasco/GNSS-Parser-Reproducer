@@ -24,8 +24,8 @@ It consists of two main scripts: `record/src/record.py` and `replay/src/replay.p
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/Diegomangasco/GNSS-Parser-Reproducer.git
-    cd GNSS-Parser-Reproducer
+        git clone https://github.com/Diegomangasco/GNSS-Parser-Reproducer.git
+        cd GNSS-Parser-Reproducer
     ```
 
 2. Install the required Python packages:
