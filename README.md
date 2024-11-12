@@ -36,7 +36,7 @@ It consists of two main scripts: `record/src/record.py` and `replay/src/replay.p
 
 3. Ensure `socat` is installed on your system:
     ```sh
-    sudo apt-get install socat
+        sudo apt-get install socat
     ```
 
 4. Ensure `nodejs` is installed on your system:
