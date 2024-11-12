@@ -1,40 +1,42 @@
-# GNSS-Parser-Reproducer
+# TRACE-X: Telemetry Replay and Analysis of CAN bus and EXternal navigation data
 
-This project is designed to record and replay GNSS serial data, specifically handling NMEA and UBX messages. 
+This project is designed to record and replay GNSS serial data, specifically handling NMEA and UBX messages, and CAN Bus data. 
 
-It consists of three main scripts: `record/src/record.py`, `replay/src/replay.py`, and `replay/src/serial_emulator.py`.
+It consists of two main scripts: `record/src/record.py` and `replay/src/replay.py`.
 
 ## Features
 
-- **serial_emulator.py**: Emulates a serial device using `socat`.
-- **record.py**: Reads data from a serial device and saves it to a JSON file.
-- **replay.py**: Reads data from a JSON file and writes it to a serial device and, if desired, it displays a GUI to visualize the vehicle.
-- **decoded_messages**: Decodes NMEA messages to extract latitude, longitude, and heading of vehicle for the GUI.
+- **record.py**: Reads data from a Serial Device and/or a CAN Bus and saves it to a JSON file.
+- **replay.py**: Reads data from JSON files and emulates in real-time a Serial Device and/or a CAN Bus. If desired, it displays a GUI to visualize the vehicle and the objects perceived.
+- **serial_emulator.py**: Utility class to emulate a serial device using `socat`.
+- **decoded_messages**: Utility class to decode NMEA messages to extract latitude, longitude, and heading of vehicle.
 
 ## Requirements
 
 - Python 3.x
 - pyserial
-- socat (for serial emulation)
 - nodejs (for the GUI mode)
-- can-utils
+- socat (for serial emulation)
+- cantools (for CAN Bus emulation)
+- [Optional] can-utils
 
 ## Installation
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/Diegomangasco/GNSS-Parser-Reproducer.git
-    cd GNSS-Parser-Reproducer
+        git clone https://github.com/Diegomangasco/GNSS-Parser-Reproducer.git
+        cd GNSS-Parser-Reproducer
     ```
 
 2. Install the required Python packages:
     ```sh
-    pip install pyserial
+        pip install pyserial
+        pip install cantools
     ```
 
 3. Ensure `socat` is installed on your system:
     ```sh
-    sudo apt-get install socat
+        sudo apt-get install socat
     ```
 
 4. Ensure `nodejs` is installed on your system:
@@ -47,12 +49,27 @@ It consists of three main scripts: `record/src/record.py`, `replay/src/replay.py
         cd replay/vehicle_visualizer
         npm install
     ```
-6. Install the can-utils packages:
+
+6. Prepare the virtual CAN Bus for the emulation:
+    ```sh
+        sudo ip link add dev vcan0 type vcan
+        sudo ip link set up vcan0       
+    ```
+
+7. [Optional] Install the can-utils packages (just if you want to test with "canplayer" and "candump"):
     ```sh
         sudo apt install can-utils
     ```
 
+## Authors
+- **Diego Gasco** - Politecnico di Torino - diego.gasco@polito.it
+- **Carlos Mateo Risma Carletti** - Politecnico di Torino - carlos.rismacarletti@polito.it
+- **Francesco Raviglione** - Politecnico di Torino - francesco.raviglione@polito.it
+- **Marco Rapelli** - Politecnico di Torino - marco.rapelli@polito.it
+- **Claudio Casetti** - Politecnico di Torino - claudio.casetti@polito.it
+
 ## Work-in-progress
 - [ ] Enable the reliable usage of baud rates higher than 115200
 - [X] Make the record script more robust to issues that may stop the recording of the trace, making it save anyway what has been captured until that moment
-- [ ] CAN Database parsing
+- [X] CAN Database parsing
+- [ ] GUI for CAN objects
