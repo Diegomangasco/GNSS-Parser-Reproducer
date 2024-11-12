@@ -6,10 +6,13 @@ from decoded_messages import DecodedMessage
 from visualizer import Visualizer
 import os
 import cantools, can
+import pyproj
 
 CLUSTER_TSHOLD_MS = 20 # In [ms]
 MAP_OPENED = False
-
+BUMPER_TO_SENSOR_DISTANCE = 1.54  # In [m]
+STANDARD_OBJECT_LENGTH = 4.24  # [m]
+STANDARD_OBJECT_WIDTH = 1.81  # [m]
 def compare_floats(a, b):
     return math.isclose(a, b, rel_tol=1e-8)
 
@@ -286,14 +289,57 @@ def write_CAN(device, filename, db_file, start_time, end_time, gui, visualizer, 
                 # Wait for the real time to be as close as possible to the simulation time
                 time.sleep(variable_delta_us_factor / 1e6)
             except:
-                print("Trying to sleep for a negative time, thus not sleeping: ", variable_delta_us_factor / 1e3)
+                # print("Trying to sleep for a negative time, thus not sleeping: ", variable_delta_us_factor / 1e3)
+                pass
             if message:
                 # Write the message to the CAN bus
                 if first_send is None:
                     first_send = time.time()
                 bus.send(final_message)
             if gui:
-                # TODO - Implement the visualization of the CAN messages through manage_map function
+                # TODO - handle other types of messages
+                if 'Object' in message.name:
+                    angle_left_signal = None
+                    angle_right_signal = None
+                    distance_signal = None
+
+                    for signal in message.signals:
+                        if 'angle' in signal.comment:
+                            if 'left' in signal.comment:
+                                angle_left_signal = signal
+                            elif 'right' in signal.comment:
+                                angle_right_signal = signal
+                        elif 'distance' in signal.comment:
+                            distance_signal = signal
+                    if visualizer.getEgoPosition() is not None and angle_left_signal and angle_right_signal and distance_signal:
+                        if content[distance_signal.name] != 0.0:
+                            ego_lat, ego_lon, ego_heading = visualizer.getEgoPosition()
+                            distance = content[distance_signal.name]
+                            angle_left = content[angle_left_signal.name]
+                            angle_right = content[angle_right_signal.name]
+                            # Calculate the position of the object
+                            dx_v = distance - BUMPER_TO_SENSOR_DISTANCE + STANDARD_OBJECT_LENGTH / 2
+                            dist_left = dx_v / math.cos(angle_left)
+                            dist_right = dx_v / math.cos(angle_right)
+                            dy_left = dist_left * math.sin(angle_left)
+                            dy_right = dist_right * math.sin(angle_right)
+                            width = dy_right - dy_left
+                            dy_v = dy_left + width / 2
+                            # ETSI TS 103 324 V2.1.1 (2023-06) demands xDistance and yDistance to be with East as positive x and North as positive y
+                            ego_heading_cart = math.radians(90-ego_heading)  # The heading from the gps is relative to North --> 90 degrees from East
+                            dy_c = -dy_v  # Left to the sensor is negative in radar frame but positive in cartesian reference
+                            xDistance = dx_v * math.cos(ego_heading_cart) - dy_c * math.sin(ego_heading_cart)
+                            yDistance = dx_v * math.sin(ego_heading_cart) + dy_c * math.cos(ego_heading_cart)
+                            # Calculate the position of the object in the global reference frame
+                            utm_zone = int((ego_lon + 180) // 6) + 1  # Calculate UTM zone based on longitude
+                            proj_tmerc = pyproj.Proj(proj='utm', zone=utm_zone, ellps='WGS84', datum='WGS84')
+                            # Forward transformation: convert geographic coordinates (lat, lon) to projected (x, y)
+                            ego_x, ego_y = proj_tmerc(ego_lon, ego_lat)
+                            ego_x += xDistance
+                            ego_y += yDistance
+                            # Reverse transformation: convert projected (x, y) back to geographic coordinates (lat, lon)
+                            lon1, lat1 = proj_tmerc(ego_x, ego_y, inverse=True)
+                            visualizer.send_object_udp_message(False, True, lat1, lon1, ego_heading, server_ip, server_port, arbitration_id, 105)
                 pass
             previous_time = d["timestamp"]
             if end_time and time.time() * 1e6 - startup_time > end_time:

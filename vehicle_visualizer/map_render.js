@@ -47,10 +47,10 @@ var icon_height_car = 300;
 
 var icon_scale_factor = 10;
 var carIcon = L.icon({
-    iconUrl: './img/black_car2.png',
+	iconUrl: './img/car1.png',
 
-    iconSize:     [icon_length_car/icon_scale_factor, icon_height_car/icon_scale_factor], // size of the icon
-    iconAnchor:   [icon_length_car/(icon_scale_factor*2), icon_height_car/(icon_scale_factor*2)], // point of the icon which will correspond to marker's location
+	iconSize:     [icon_length_car/icon_scale_factor, icon_height_car/icon_scale_factor*1.4], // size of the icon
+	iconAnchor:   [icon_length_car/(icon_scale_factor*2), icon_height_car/(icon_scale_factor*2)], // point of the icon which will correspond to marker's location
 	popupAnchor:  [0, 0] // point from which the popup should open relative to the iconAnchor
 });
 
@@ -71,11 +71,11 @@ var detectedPedestrianIcon = L.icon({
 });
 
 var detectedCarIcon = L.icon({
-    iconUrl: './img/detected_car6.png',
+	iconUrl: './img/detected_car9.png',
 
-    iconSize:     [icon_length_car/icon_scale_factor, icon_height_car/icon_scale_factor], // size of the icon
-    iconAnchor:   [icon_length_car/(icon_scale_factor*2), icon_height_car/(icon_scale_factor*2)], // point of the icon which will correspond to marker's location
-    popupAnchor:  [0, 0] // point from which the popup should open relative to the iconAnchor
+	iconSize:     [icon_length_car/icon_scale_factor*0.8, icon_height_car/icon_scale_factor*1.2], // size of the icon
+	iconAnchor:   [icon_length_car/(icon_scale_factor*2), icon_height_car/(icon_scale_factor*2)], // point of the icon which will correspond to marker's location
+	popupAnchor:  [0, 0] // point from which the popup should open relative to the iconAnchor
 });
 
 var circleIcon = L.icon({
@@ -195,7 +195,7 @@ function update_marker(mapref,id,lat,lon,stationtype,heading)
 			let initial_icon;
 			let initial_icon_idx;
 
-			if(stationtype === 0) {
+			if(stationtype === 0 || stationtype === 105) {
                 initial_icon = detectedCarIcon;
                 initial_icon_idx = DETECTED_CAR_ICO_IDX;
 			} else {
@@ -204,11 +204,11 @@ function update_marker(mapref,id,lat,lon,stationtype,heading)
 					initial_icon = circleIcon;
 					initial_icon_idx = CIRCLE_ICO_IDX;
 				} else {
-                    if(stationtype === 110) {
+                    if(stationtype === 1  || stationtype === 101) {
                         initial_icon = detectedPedestrianIcon;
                         initial_icon_idx = DETECTED_PEDESTRIAN_ICO_IDX;
                    } else {
-                        if (stationtype === 117) {
+                        if (stationtype === 7 || stationtype === 8 || stationtype === 107) {
                         initial_icon = detectedTruckIcon;
                         initial_icon_idx = DETECTED_TRUCK_ICO_IDX;
                     } else {
