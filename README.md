@@ -32,6 +32,7 @@ It consists of two main scripts: `record/src/record.py` and `replay/src/replay.p
     ```sh
         pip install pyserial
         pip install cantools
+        pip install pyproj
     ```
 
 3. Ensure `socat` is installed on your system:
