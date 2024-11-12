@@ -277,7 +277,7 @@ def write_CAN(device, filename, db_file, start_time, end_time, gui, visualizer, 
             if message:
                 # Encode the content of the message
                 data = db.encode_message(message.frame_id, content)
-                final_message = can.Message(arbitration_id=message.frame_id, data=data)
+                final_message = can.Message(arbitration_id=message.frame_id, data=data, is_extended_id=False)
             start_time_us = start_time if start_time else 0
             # Calculate the delta time in the recording between the current message and the start time
             delta_time_us_simulation = d["timestamp"] - start_time_us
@@ -425,12 +425,12 @@ def main():
     test_rate = args.enable_test_rate
 
     CAN = args.enable_CAN
-    CAN = True # For testing purposes
+    # CAN = True # For testing purposes
     CAN_db = args.CAN_db
-    CAN_db = "./data/can_db/PCAN.dbc" # For testing purposes
+    # CAN_db = "./data/can_db/PCAN.dbc" # For testing purposes
     CAN_device = args.CAN_device
     CAN_filename = args.CAN_filename
-    CAN_filename = "./data/can_output/CANlog.json" # For testing purposes
+    # CAN_filename = "./data/can_output/CANlog.json" # For testing purposes
 
     assert serial > 0 or gui > 0 or test_rate > 0 or CAN > 0, "At least one of the serial or GUI or test rate or CAN options must be activated"
 
@@ -439,7 +439,7 @@ def main():
         exit(1)
 
     visualizer = None
-    
+    fifo_path = None
     if gui or test_rate:
         # Creation of the visualizer object
         visualizer = Visualizer()
