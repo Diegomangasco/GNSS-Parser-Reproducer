@@ -14,11 +14,12 @@ It consists of two main scripts: `record/src/record.py` and `replay/src/replay.p
 ## Requirements
 
 - Python 3.x
-- pyserial
-- nodejs (for the GUI mode)
+- pyserial (for serial recording and reproducing)
+- pyproj (for GUI mode)
+- nodejs (for GUI mode)
 - socat (for serial emulation)
-- cantools (for CAN Bus emulation)
-- [Optional] can-utils
+- cantools (for CAN Bus recording and reproducing)
+- [Optional] can-utils (for testing CAN Bus features with "canplayer" and "candump")
 
 ## Installation
 
@@ -69,8 +70,8 @@ It consists of two main scripts: `record/src/record.py` and `replay/src/replay.p
 - **Marco Rapelli** - Politecnico di Torino - marco.rapelli@polito.it
 - **Claudio Casetti** - Politecnico di Torino - claudio.casetti@polito.it
 
-## Work-in-progress
+## Work-in-progress for the first release
 - [ ] Enable the reliable usage of baud rates higher than 115200
 - [X] Make the record script more robust to issues that may stop the recording of the trace, making it save anyway what has been captured until that moment
 - [X] CAN Database parsing
-- [ ] GUI for CAN objects
+- [X] GUI for CAN objects
