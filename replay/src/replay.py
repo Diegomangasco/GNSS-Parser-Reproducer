@@ -13,6 +13,9 @@ MAP_OPENED = False
 BUMPER_TO_SENSOR_DISTANCE = 1.54  # In [m]
 STANDARD_OBJECT_LENGTH = 4.24  # [m]
 STANDARD_OBJECT_WIDTH = 1.81  # [m]
+
+ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present = False, False, False, False
+
 def compare_floats(a, b):
     return math.isclose(a, b, rel_tol=1e-8)
 
@@ -22,17 +25,16 @@ def filter_by_start_time(data, start_time):
     return list(filter(lambda x: x["timestamp"] >= start_time_micseconds, data))
 
 def set_ubx_flag(ubx_type):
-    bool_list = [False, False, False, False]
+    global ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present
     if ubx_type is not None:
         if ubx_type == "NAV-PVT":
-            bool_list[0] = True
+            ubx_nav_pvt_present = True
         if ubx_type == "NAV-ATT":
-            bool_list[1] = True
+            ubx_nav_att_present = True
         if ubx_type == "ESF-INS":
-            bool_list[2] = True
+            ubx_esf_ins_present = True
         if ubx_type == "ESF-RAW":
-            bool_list[3] = True
-    return tuple(bool_list)
+            ubx_esf_raw_present = True
         
 def manage_map(GNSS_flag, CAN_flag, fifo_path, latitude, longitude, heading, server_ip, server_port, visualizer):
     global MAP_OPENED
@@ -56,7 +58,8 @@ def manage_map(GNSS_flag, CAN_flag, fifo_path, latitude, longitude, heading, ser
         print(f"Error sending UDP message: {e}")
         raise e
     
-def print_test_rate_stats(average_update_time, average_update_time_filtered, ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present):
+def print_test_rate_stats(average_update_time, average_update_time_filtered):
+    global ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present
     print("Average update periodicity:", average_update_time, "ms")
 
     print("Average update rate (filtered):", 1e3/average_update_time_filtered, "Hz")
@@ -72,6 +75,7 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
     """
     Writes the data from the file to the serial device or does a test rate analysis.
     """
+    global ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present
     try:
         if serial:
             # Creation of the serial emulator
@@ -111,11 +115,6 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
         prev_latitude_deg = -8000
         prev_longitude_deg = -8000
 
-        ubx_nav_pvt_present=False
-        ubx_nav_att_present=False
-        ubx_esf_ins_present=False
-        ubx_esf_raw_present=False
-
         first_send = None
         startup_time = time.time() * 1e6
         for d in data:
@@ -154,7 +153,7 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                 if message_type == "UBX":
                     # Check the UBX message type
                     ubx_type = decoder.get_ubx_message_type(content)
-                    ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present = set_ubx_flag(ubx_type)
+                    set_ubx_flag(ubx_type)
                     tmp_lat, tmp_lon, _ = decoder.extract_data(content, message_type)
                 else:
                     tmp_lat, tmp_lon, _ = decoder.extract_data(content.decode(), message_type)
