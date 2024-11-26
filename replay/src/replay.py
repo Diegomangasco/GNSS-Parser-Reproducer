@@ -244,7 +244,7 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
         if gui:
             visualizer.stop_server(server_ip, server_port)
         if test_rate:
-            print_test_rate_stats(average_update_time, average_update_time_filtered, ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present)
+            print_test_rate_stats(average_update_time, average_update_time_filtered)
             print("Saving data to replay_out.csv...")
             np.savetxt('replay_out.csv', [p for p in zip(update_timestamps, update_msg_type, update_periodicities, update_rates, update_msg_clustered, update_msg_lat, update_msg_lon, update_msg_same_position)], delimiter=',', fmt='%s')
 
