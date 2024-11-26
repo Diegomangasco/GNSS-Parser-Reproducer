@@ -22,18 +22,17 @@ def filter_by_start_time(data, start_time):
     return list(filter(lambda x: x["timestamp"] >= start_time_micseconds, data))
 
 def set_ubx_flag(ubx_type):
+    bool_list = [False, False, False, False]
     if ubx_type is not None:
         if ubx_type == "NAV-PVT":
-            return True, False, False, False
-        elif ubx_type == "NAV-ATT":
-            return False, True, False, False
-        elif ubx_type == "ESF-INS":
-            return False, False, True, False
-        elif ubx_type == "ESF-RAW":
-            return False, False, False, True
-        else:
-            # print("Unknown UBX message type:", ubx_type)
-            return False, False, False, False
+            bool_list[0] = True
+        if ubx_type == "NAV-ATT":
+            bool_list[1] = True
+        if ubx_type == "ESF-INS":
+            bool_list[2] = True
+        if ubx_type == "ESF-RAW":
+            bool_list[3] = True
+    return tuple(bool_list)
         
 def manage_map(GNSS_flag, CAN_flag, fifo_path, latitude, longitude, heading, server_ip, server_port, visualizer):
     global MAP_OPENED
@@ -101,7 +100,7 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
         average_update_time_filtered = 0
         cnt_update_time_filtered = 0
         update_timestamps = ["Timestamp_ms"]
-        update_peridocities = ["Peridocity_ms"]
+        update_periodicities = ["Peridocity_ms"]
         update_rates = ["Rate_Hz"]
         update_msg_type = ["Message_type"]
         update_msg_clustered = ["Clustered"]
@@ -198,8 +197,9 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                 prev_longitude_deg = test_rate_lon
 
                 update_timestamps.append(d["timestamp"]/1e3)
-                update_peridocities.append(delta_pos_time/1e3)
-                update_rates.append(1e6/(delta_pos_time))
+                if delta_pos_time > 0:
+                    update_periodicities.append(delta_pos_time/1e3)
+                    update_rates.append(1e6/(delta_pos_time))
                 if message_type == "UBX":
                     update_msg_type.append("UBX-NAV-PVT")
                 else:
@@ -247,7 +247,7 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
         if test_rate:
             print_test_rate_stats(average_update_time, average_update_time_filtered, ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present)
             print("Saving data to replay_out.csv...")
-            np.savetxt('replay_out.csv', [p for p in zip(update_timestamps, update_msg_type, update_peridocities, update_rates, update_msg_clustered, update_msg_lat, update_msg_lon, update_msg_same_position)], delimiter=',', fmt='%s')
+            np.savetxt('replay_out.csv', [p for p in zip(update_timestamps, update_msg_type, update_periodicities, update_rates, update_msg_clustered, update_msg_lat, update_msg_lon, update_msg_same_position)], delimiter=',', fmt='%s')
 
 def write_CAN(device, filename, db_file, start_time, end_time, gui, visualizer, server_ip, server_port):
     """
