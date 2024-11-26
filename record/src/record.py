@@ -35,7 +35,6 @@ def save_message(messages, res, timestamp, message_type):
             "type": message_type,
             "data": res.hex() if message_type in ["UBX", "Unknown"] else res.decode()
         }
-        messages.append(data)
     except:
         data = {
             "timestamp": timestamp,
