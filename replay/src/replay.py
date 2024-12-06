@@ -111,6 +111,8 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
         update_msg_same_position = ["Same_pos_as_previous"]
         update_msg_lat = ["Latitude"]
         update_msg_lon = ["Longitude"]
+        update_msg_heading = ["Heading"]
+        update_msg_speed = ["Speed"]
 
         prev_latitude_deg = -8000
         prev_longitude_deg = -8000
@@ -128,7 +130,7 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
             if message_type == "UBX":
                 content = bytes.fromhex(content)
                 if gui:
-                    tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content, message_type)
+                    tmp_lat, tmp_lon, tmp_heading, _ = decoder.extract_data(content, message_type)
                     if tmp_lat:
                         latitude = tmp_lat
                     if tmp_lon:
@@ -139,7 +141,7 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                 # For the NMEA messages we need to encode the content for the serial emulator and decode it for the GUI (to obtain a string)
                 content = content.encode()
                 if gui:
-                    tmp_lat, tmp_lon, tmp_heading = decoder.extract_data(content.decode(), message_type)
+                    tmp_lat, tmp_lon, tmp_heading, _ = decoder.extract_data(content.decode(), message_type)
                     if tmp_lat:
                         latitude = tmp_lat
                     if tmp_lon:
@@ -150,19 +152,26 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
             if test_rate:
                 test_rate_lat = None
                 test_rate_lon = None
+                test_rate_heading = None
+                test_rate_speed = None
+                tmp_lat, tmp_lon, tmp_heading, tmp_speed = None, None, None, None
                 if message_type == "UBX":
                     # Check the UBX message type
                     ubx_type = decoder.get_ubx_message_type(content)
                     set_ubx_flag(ubx_type)
-                    tmp_lat, tmp_lon, _ = decoder.extract_data(content, message_type)
+                    tmp_lat, tmp_lon, tmp_heading, tmp_speed = decoder.extract_data(content, message_type)
                 else:
-                    tmp_lat, tmp_lon, _ = decoder.extract_data(content.decode(), message_type)
+                    tmp_lat, tmp_lon, tmp_heading, tmp_speed = decoder.extract_data(content.decode(), message_type)
                 if tmp_lat:
                     test_rate_lat = tmp_lat
                 if tmp_lon:
                     test_rate_lon = tmp_lon
+                if tmp_heading:
+                    test_rate_heading = tmp_heading
+                if tmp_speed:
+                    test_rate_speed = tmp_speed
                 
-                if not test_rate_lat or not test_rate_lon:
+                if not test_rate_lat and not test_rate_lon and not test_rate_heading and not test_rate_speed:
                     continue
 
                 delta_pos_time = d["timestamp"] - previous_pos_time
@@ -172,7 +181,8 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                 else:
                     print("Time since last update (NMEA):", delta_pos_time/1e3, "Time:", d["timestamp"]/1e3)
                 
-                print("Latitude [deg]:", test_rate_lat, "Longitude [deg]:", test_rate_lon)
+                if test_rate_lat or test_rate_lon:
+                    print("Latitude [deg]:", test_rate_lat, "Longitude [deg]:", test_rate_lon)
 
                 previous_pos_time = d["timestamp"]
 
@@ -180,31 +190,50 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                 average_update_time = average_update_time + (delta_pos_time/1e3-average_update_time) / cnt_update_time
                 
                 # Check if the position update is clustered or not (based on the time and position)
-                if delta_pos_time/1e3 > CLUSTER_TSHOLD_MS or not compare_floats(prev_latitude_deg, test_rate_lat) or not compare_floats(prev_longitude_deg, test_rate_lon):
-                    cnt_update_time_filtered = cnt_update_time_filtered + 1
-                    average_update_time_filtered = average_update_time_filtered + (delta_pos_time/1e3-average_update_time_filtered) / cnt_update_time_filtered
-                    update_msg_clustered.append(0)
-                else:
-                    update_msg_clustered.append(1)
+                if test_rate_lat and test_rate_lon:
+                    if delta_pos_time/1e3 > CLUSTER_TSHOLD_MS or not compare_floats(prev_latitude_deg, test_rate_lat) or not compare_floats(prev_longitude_deg, test_rate_lon):
+                        cnt_update_time_filtered = cnt_update_time_filtered + 1
+                        average_update_time_filtered = average_update_time_filtered + (delta_pos_time/1e3-average_update_time_filtered) / cnt_update_time_filtered
+                        update_msg_clustered.append(0)
+                    else:
+                        update_msg_clustered.append(1)
 
-                if compare_floats(prev_latitude_deg, test_rate_lat) and compare_floats(prev_longitude_deg, test_rate_lon):
-                    update_msg_same_position.append(1)
-                else:
-                    update_msg_same_position.append(0)
+                    if compare_floats(prev_latitude_deg, test_rate_lat) and compare_floats(prev_longitude_deg, test_rate_lon):
+                        update_msg_same_position.append(1)
+                    else:
+                        update_msg_same_position.append(0)
 
-                prev_latitude_deg = test_rate_lat
-                prev_longitude_deg = test_rate_lon
+                    prev_latitude_deg = test_rate_lat
+                    prev_longitude_deg = test_rate_lon
+                else:
+                    update_msg_clustered.append(np.nan)
+                    update_msg_same_position.append(np.nan)
 
                 update_timestamps.append(d["timestamp"]/1e3)
-                if delta_pos_time > 0:
-                    update_periodicities.append(delta_pos_time/1e3)
-                    update_rates.append(1e6/(delta_pos_time))
+
+                assert delta_pos_time > 0, "Error: negative time between two messages"
+                update_periodicities.append(delta_pos_time/1e3)
+                update_rates.append(1e6/(delta_pos_time))
+
                 if message_type == "UBX":
                     update_msg_type.append("UBX-NAV-PVT")
                 else:
                     update_msg_type.append("NMEA-Gx" + content[3:6].decode())
-                update_msg_lat.append(test_rate_lat)
-                update_msg_lon.append(test_rate_lon)
+
+                if test_rate_lat and test_rate_lon:
+                    update_msg_lat.append(test_rate_lat)
+                    update_msg_lon.append(test_rate_lon)
+                else:
+                    update_msg_lat.append(np.nan)
+                    update_msg_lon.append(np.nan)
+                if test_rate_heading:
+                    update_msg_heading.append(test_rate_heading)
+                else:
+                    update_msg_heading.append(np.nan)
+                if test_rate_speed:
+                    update_msg_speed.append(test_rate_speed)
+                else:
+                    update_msg_speed.append(np.nan)
             else:
                 # Calculate a variable delta time factor to adjust the time of the serial write to be as close as possible to a real time simulation
                 # delta_time_us represents the real time in microseconds from the beginning of the simulation to the current time
@@ -244,9 +273,18 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
         if gui:
             visualizer.stop_server(server_ip, server_port)
         if test_rate:
-            print_test_rate_stats(average_update_time, average_update_time_filtered)
-            print("Saving data to replay_out.csv...")
-            np.savetxt('replay_out.csv', [p for p in zip(update_timestamps, update_msg_type, update_periodicities, update_rates, update_msg_clustered, update_msg_lat, update_msg_lon, update_msg_same_position)], delimiter=',', fmt='%s')
+            try:
+                print_test_rate_stats(average_update_time, average_update_time_filtered)
+                print("Saving data to file statistics_out.csv")
+                np.savetxt(
+                    'statistics_out.csv', 
+                    [p for p in zip(update_timestamps, update_msg_type, update_periodicities, update_rates, update_msg_clustered, update_msg_same_position, update_msg_lat, update_msg_lon, update_msg_heading, update_msg_speed)],
+                    delimiter=',', fmt='%s'
+                )
+                print("Data saved successfully")            
+            except Exception as e:
+                print(f"Error: {e}")
+
 
 def write_CAN(device, filename, db_file, start_time, end_time, gui, visualizer, server_ip, server_port):
     """
@@ -439,7 +477,7 @@ def main():
 
     visualizer = None
     fifo_path = None
-    if gui or test_rate:
+    if gui:
         # Creation of the visualizer object
         visualizer = Visualizer()
         # If GUI modality is activated, start the nodejs server
