@@ -14,7 +14,7 @@ BUMPER_TO_SENSOR_DISTANCE = 1.54  # In [m]
 STANDARD_OBJECT_LENGTH = 4.24  # [m]
 STANDARD_OBJECT_WIDTH = 1.81  # [m]
 
-ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present = False, False, False, False
+UBX_NAV_PVT_PRESENT, UBX_NAV_ATT_PRESENT, UBX_ESF_INS_PRESENT, UBX_ESF_RAW_PRESENT = False, False, False, False
 
 def compare_floats(a, b):
     return math.isclose(a, b, rel_tol=1e-8)
@@ -25,16 +25,16 @@ def filter_by_start_time(data, start_time):
     return list(filter(lambda x: x["timestamp"] >= start_time_micseconds, data))
 
 def set_ubx_flag(ubx_type):
-    global ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present
+    global UBX_NAV_PVT_PRESENT, UBX_NAV_ATT_PRESENT, UBX_ESF_INS_PRESENT, UBX_ESF_RAW_PRESENT
     if ubx_type is not None:
         if ubx_type == "NAV-PVT":
-            ubx_nav_pvt_present = True
+            UBX_NAV_PVT_PRESENT = True
         if ubx_type == "NAV-ATT":
-            ubx_nav_att_present = True
+            UBX_NAV_ATT_PRESENT = True
         if ubx_type == "ESF-INS":
-            ubx_esf_ins_present = True
+            UBX_ESF_INS_PRESENT = True
         if ubx_type == "ESF-RAW":
-            ubx_esf_raw_present = True
+            UBX_ESF_RAW_PRESENT = True
         
 def manage_map(GNSS_flag, CAN_flag, fifo_path, latitude, longitude, heading, server_ip, server_port, visualizer):
     global MAP_OPENED
@@ -59,23 +59,23 @@ def manage_map(GNSS_flag, CAN_flag, fifo_path, latitude, longitude, heading, ser
         raise e
     
 def print_test_rate_stats(average_update_time, average_update_time_filtered):
-    global ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present
+    global UBX_NAV_PVT_PRESENT, UBX_NAV_ATT_PRESENT, UBX_ESF_INS_PRESENT, UBX_ESF_RAW_PRESENT
     print("Average update periodicity:", average_update_time, "ms")
 
     print("Average update rate (filtered):", 1e3/average_update_time_filtered, "Hz")
     print("Average update periodicity (filtered):", average_update_time_filtered, "ms")
 
     print("UBX messages statistics:")
-    print("UBX-NAV-PVT present:",ubx_nav_pvt_present)
-    print("UBX-NAV-ATT present:",ubx_nav_att_present)
-    print("UBX-ESF-INS present:",ubx_esf_ins_present)
-    print("UBX-ESF-RAW present:",ubx_esf_raw_present)
+    print("UBX-NAV-PVT present:", UBX_NAV_PVT_PRESENT)
+    print("UBX-NAV-ATT present:", UBX_NAV_ATT_PRESENT)
+    print("UBX-ESF-INS present:", UBX_ESF_INS_PRESENT)
+    print("UBX-ESF-RAW present:", UBX_ESF_RAW_PRESENT)
 
 def serial_test_rate(server_device, client_device, baudrate, filename, start_time, end_time, gui, serial, test_rate, server_ip, server_port, fifo_path, visualizer):
     """
     Writes the data from the file to the serial device or does a test rate analysis.
     """
-    global ubx_nav_pvt_present, ubx_nav_att_present, ubx_esf_ins_present, ubx_esf_raw_present
+    global UBX_NAV_PVT_PRESENT, UBX_NAV_ATT_PRESENT, UBX_ESF_INS_PRESENT, UBX_ESF_RAW_PRESENT
     try:
         if serial:
             # Creation of the serial emulator
@@ -427,7 +427,7 @@ def main():
     - --CAN_filename (str): The CAN file to read from. Default is "./data/CANlog.log".
 
     Example:
-    python3 replay.py --enable_serial --serial_filename ./data/examples/example1.json --server_device ./replay/ttyNewServer --client_device ./replay/ttyNewClient --baudrate 115200 --start_time 0 --end_time 10 --enable_gui --enable_test_rate --httpport 8080 --server_ip
+    python3 ./replay/src/replay.py --enable_serial --serial_filename ./data/examples/example1.json --server_device ./replay/ttyNewServer --client_device ./replay/ttyNewClient --baudrate 115200 --start_time 0 --end_time 10 --enable_gui --enable_test_rate --httpport 8080 --server_ip
     """
     args = argparse.ArgumentParser()
     args.add_argument("--enable_serial", action="store_true", help="Enable serial emulator")
