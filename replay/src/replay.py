@@ -104,11 +104,12 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
         average_update_time_filtered = 0
         cnt_update_time_filtered = 0
         update_timestamps = ["Timestamp_ms"]
-        update_periodicities = ["Peridocity_ms"]
+        update_periodicities = ["Periodicity_ms"]
         update_rates = ["Rate_Hz"]
         update_msg_type = ["Message_type"]
         update_msg_clustered = ["Clustered"]
         update_msg_same_position = ["Same_pos_as_previous"]
+        update_msg_same_speed = ["Same_speed_as_previous"]
         update_msg_lat = ["Latitude"]
         update_msg_lon = ["Longitude"]
         update_msg_heading = ["Heading"]
@@ -116,6 +117,7 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
 
         prev_latitude_deg = -8000
         prev_longitude_deg = -8000
+        prev_speed = -8000
 
         first_send = None
         startup_time = time.time() * 1e6
@@ -206,8 +208,15 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                     prev_latitude_deg = test_rate_lat
                     prev_longitude_deg = test_rate_lon
                 else:
-                    update_msg_clustered.append(np.nan)
-                    update_msg_same_position.append(np.nan)
+                    update_msg_clustered.append(-1000)
+                    update_msg_same_position.append(-1000)
+                
+                if test_rate_speed:
+                    if compare_floats(prev_speed, test_rate_speed):
+                        update_msg_same_speed.append(1)
+                    else:
+                        update_msg_same_speed.append(0)
+                    prev_speed = test_rate_speed
 
                 update_timestamps.append(d["timestamp"]/1e3)
 
@@ -222,18 +231,23 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
 
                 if test_rate_lat and test_rate_lon:
                     update_msg_lat.append(test_rate_lat)
+                else:
+                    update_msg_lon.append(-1000)
+
+                if test_rate_lon:
                     update_msg_lon.append(test_rate_lon)
                 else:
-                    update_msg_lat.append(np.nan)
-                    update_msg_lon.append(np.nan)
+                    update_msg_lat.append(-1000)
+
                 if test_rate_heading:
                     update_msg_heading.append(test_rate_heading)
                 else:
-                    update_msg_heading.append(np.nan)
+                    update_msg_heading.append(-1000)
+
                 if test_rate_speed:
                     update_msg_speed.append(test_rate_speed)
                 else:
-                    update_msg_speed.append(np.nan)
+                    update_msg_speed.append(-1000)
             else:
                 # Calculate a variable delta time factor to adjust the time of the serial write to be as close as possible to a real time simulation
                 # delta_time_us represents the real time in microseconds from the beginning of the simulation to the current time
@@ -260,8 +274,10 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
             previous_time = d["timestamp"]
             if end_time and time.time() * 1e6 - startup_time > end_time:
                 break
+
     except Exception as e:
         print(f"Error: {e}")
+
     finally:
         if serial:
             ser.stop()
@@ -278,10 +294,10 @@ def serial_test_rate(server_device, client_device, baudrate, filename, start_tim
                 print("Saving data to file statistics_out.csv")
                 np.savetxt(
                     'statistics_out.csv', 
-                    [p for p in zip(update_timestamps, update_msg_type, update_periodicities, update_rates, update_msg_clustered, update_msg_same_position, update_msg_lat, update_msg_lon, update_msg_heading, update_msg_speed)],
+                    [p for p in zip(update_timestamps, update_msg_type, update_periodicities, update_rates, update_msg_clustered, update_msg_same_position, update_msg_same_speed, update_msg_lat, update_msg_lon, update_msg_heading, update_msg_speed)],
                     delimiter=',', fmt='%s'
                 )
-                print("Data saved successfully")            
+                print("Data saved successfully")           
             except Exception as e:
                 print(f"Error: {e}")
 
